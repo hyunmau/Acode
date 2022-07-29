@@ -171,32 +171,26 @@ async function ondeviceready() {
   try {
     acode.pluginServer = await createPluginServer();
     acode.pluginServer.setOnRequestHandler(pluginServer);
-    acode.setLoadingMessage('Loading plugins...');
-    loadPlugins()
-      .then((numberOfPluginLoaded) => {
-        if (numberOfPluginLoaded > 0) {
-          toast(`${numberOfPluginLoaded} plugins loaded.`)
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-        toast('Plugins loading failed!');
-      });
   } catch (error) {
     console.error(error);
     toast('Plugins loading failed!');
   }
 
-  if (appSettings.value.showAd) {
-    acode.exec('load-ad');
-  } else {
-    const loadAd = (value) => {
-      appSettings.off('update:showAd', loadAd);
-      if (value) {
-        acode.exec('load-ad');
-      }
-    };
-    appSettings.on('update:showAd', loadAd);
+  if (IS_FREE_VERSION && admob) {
+    admob
+      .start()
+      .then(async () => {
+        const ad = new admob.BannerAd({
+          adUnitId: 'ca-app-pub-5911839694379275/9157899592', // Production
+          // adUnitId: 'ca-app-pub-3940256099942544/6300978111', // Test
+          position: 'bottom',
+        });
+        window.ad = ad;
+      });
+
+    document.addEventListener('admob.banner.size', (event) => {
+      console.log(event);
+    });
   }
 
   acode.setLoadingMessage('Loading custom theme...');
@@ -367,7 +361,7 @@ async function loadApp() {
     if (res.success === 0) {
       editorManager.addNewFile();
     }
-    onEditorUpdate();
+    onEditorUpdate(false);
   } else {
     editorManager.addNewFile();
   }
@@ -379,6 +373,7 @@ async function loadApp() {
   }, 1000);
 
   //#region Add event listeners
+  root.on('show', mainPageOnShow);
   editorManager.onupdate = onEditorUpdate;
   editorManager.on('rename-file', onRenameOrSwitchFile);
   editorManager.on('switch-file', onRenameOrSwitchFile);
@@ -434,6 +429,14 @@ async function loadApp() {
     .catch(console.error);
 
   onRenameOrSwitchFile();
+
+  //load plugins
+  loadPlugins()
+    .then(() => { })
+    .catch((error) => {
+      console.error(error);
+      toast('Plugins loading failed!');
+    });
 
   /**
    *
@@ -504,7 +507,7 @@ async function loadApp() {
     editorManager.editor.focus();
   }
 
-  function onEditorUpdate() {
+  function onEditorUpdate(saveState = true) {
     const activeFile = editorManager.activeFile;
     const $save = $footer.querySelector('[action=save]');
 
@@ -522,7 +525,7 @@ async function loadApp() {
       }
     }
 
-    acode.exec('save-state');
+    if (saveState) acode.exec('save-state');
   }
 
   function onRenameOrSwitchFile() {
@@ -567,4 +570,9 @@ function onClickApp(e) {
 
     return false;
   }
+}
+
+function mainPageOnShow() {
+  const { editor } = editorManager;
+  editor.resize(true);
 }

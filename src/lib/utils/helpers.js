@@ -462,7 +462,7 @@ export default {
   /**
    * Converts Blob object to text
    * @param {Blob} blob
-   * @returns {String}
+   * @returns {Promise<string>}
    */
   blob2text(blob) {
     return new Promise((resolve, reject) => {
@@ -739,8 +739,10 @@ export default {
   hideAd(force = false) {
     const { ad } = window;
     if (IS_FREE_VERSION && ad?.shown) {
-      const $pages = tag.getAll('wc-page:not(#root)');
-      if (force || $pages.length === 1) {
+      const $pages = tag.getAll('.page-replacement');
+      const hide = $pages.length === 1;
+
+      if (force || hide) {
         ad.hide();
         ad.shown = false;
       }

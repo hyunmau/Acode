@@ -63,12 +63,12 @@ export default class WCPage extends HTMLElement {
   connectedCallback() {
     this.classList.remove('hide');
     if (typeof this.onconnect === 'function') this.onconnect();
-    for (const cb of this.#on.show) cb.call(this);
+    this.#on.show.forEach(cb => cb.call(this));
   }
 
   disconnectedCallback() {
     if (typeof this.ondisconnect === 'function') this.ondisconnect();
-    for (const cb of this.#on.hide) cb.call(this);
+    this.#on.hide.forEach(cb => cb.call(this));
   }
 
   /**
@@ -106,6 +106,7 @@ export default class WCPage extends HTMLElement {
     if (typeof this.onhide === 'function') this.onhide();
     setTimeout(() => {
       this.remove();
+      this.handler.remove();
     }, 150);
   }
 
@@ -189,16 +190,21 @@ class PageHandler {
   $replacement;
   onRemove;
 
+  /**
+   * 
+   * @param {HTMLElement} $el 
+   */
   constructor($el) {
     this.$el = $el;
 
     this.onhide = this.onhide.bind(this);
     this.onshow = this.onshow.bind(this);
 
-    this.$el.on('hide', this.onhide);
-    this.$el.on('show', this.onshow);
     this.$replacement = tag('span', { className: 'page-replacement' });
     this.$replacement.handler = this;
+
+    this.$el.on('hide', this.onhide);
+    this.$el.on('show', this.onshow);
   }
 
   /**
@@ -229,6 +235,10 @@ class PageHandler {
   onshow() {
     this.$el.off('show', this.onshow);
     handlePagesForSmoothExprience();
+  }
+
+  remove() {
+    this.$replacement.remove();
   }
 }
 
