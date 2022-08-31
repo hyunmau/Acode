@@ -1,20 +1,22 @@
+import './gists.scss';
+
 import tag from 'html-tag-js';
 import mustache from 'mustache';
-import helpers from '../../lib/utils/helpers';
+import helpers from '../../utils/helpers';
 import GithubLogin from '../login/login';
 import Page from '../../components/page';
 
 import _template from './gists.hbs';
 import _menu from './menu.hbs';
-import './gists.scss';
 import contextMenu from '../../components/contextMenu';
-import fs from '../../lib/fileSystem/internalFs';
+import fs from '../../fileSystem/internalFs';
 import dialogs from '../../components/dialogs';
 import git from '../../lib/git';
 import GistFiles from '../gistFiles/gistFiles';
 import constants from '../../lib/constants';
 import searchBar from '../../components/searchbar';
 import Icon from '../../components/icon';
+import EditorFile from '../../lib/editorFile';
 
 function GistsInclude(callbackGists) {
   const $search = tag('span', {
@@ -163,7 +165,7 @@ function GistsInclude(callbackGists) {
 
           const gist = gistRecord.add(newGist, true);
 
-          editorManager.addNewFile(filename, {
+          new EditorFile(filename, {
             type: 'gist',
             text: file.content,
             isUnsaved: false,

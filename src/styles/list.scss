@@ -11,18 +11,18 @@
         display: none;
       }
 
-      > .tile {
-        > .folder::before {
+      >.tile {
+        >.folder::before {
           content: '\e92c' !important;
         }
 
-        > .indicator::before {
+        >.indicator::before {
           content: '\e9bd' !important;
         }
       }
     }
 
-    > .tile {
+    >.tile {
       position: relative;
       height: 30px;
       font-size: 1em;
@@ -60,11 +60,11 @@
         }
       }
 
-      > .folder::before {
+      >.folder::before {
         content: '\e92d';
       }
 
-      > .indicator::before {
+      >.indicator::before {
         content: '\e9a6';
       }
 
@@ -80,7 +80,7 @@
       padding-left: 10px;
       box-sizing: border-box;
 
-      > .tile {
+      >.tile {
         height: 30px;
 
         .octicon,
@@ -92,7 +92,7 @@
       }
 
       .collaspable {
-        > .tile {
+        >.tile {
           background-color: transparent;
         }
       }
@@ -103,13 +103,13 @@
       font-family: 'Roboto', sans-serif;
       font-weight: bolder;
       color: rgb(37, 37, 37);
-      color: var(--text-color);
+      color: var(--secondary-text-color);
       font-weight: 900;
       text-transform: uppercase;
     }
   }
 
-  > .list-item {
+  >.list-item {
     display: flex;
     min-height: 60px;
     text-decoration: none;
@@ -150,7 +150,7 @@
         display: flex;
         align-items: center;
 
-        button{
+        button {
           background-color: rgb(51, 153, 255);
           background-color: var(--button-background-color);
           color: rgb(255, 255, 255);
@@ -197,8 +197,14 @@
       font-size: 1.4em;
     }
 
-    *:not([action]) {
+    * {
       pointer-events: none;
+    }
+
+    [data-action],
+    [action],
+    a {
+      pointer-events: all !important;
     }
   }
 }
@@ -236,9 +242,16 @@ ul {
         }
       }
 
-      *:not([action]) {
+      * {
         pointer-events: none;
         overflow: hidden;
+      }
+
+      [data-action],
+      [action],
+      a {
+        pointer-events: all !important;
+        overflow: auto !important;
       }
 
       &.tile:active {
@@ -259,6 +272,7 @@ ul {
 }
 
 .list {
+
   &:empty,
   &.empty {
     display: flex;
@@ -269,7 +283,7 @@ ul {
     &::after {
       content: attr(empty-msg);
       color: rgb(37, 37, 37);
-      color: var(--text-color);
+      color: var(--secondary-text-color);
       text-align: center;
       font-weight: 900;
       background: transparent;

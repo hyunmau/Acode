@@ -1,10 +1,10 @@
-import fs from './fileSystem/internalFs';
+import fs from '../fileSystem/internalFs';
 import dialogs from '../components/dialogs';
-import helpers from './utils/helpers';
-import GitHub from './GitHubAPI/GitHub';
-import path from './utils/Path';
-import Url from './utils/Url';
-import fsOperation from './fileSystem/fsOperation';
+import helpers from '../utils/helpers';
+import GitHub from '../GitHubAPI/GitHub';
+import path from '../utils/Path';
+import Url from '../utils/Url';
+import fsOperation from '../fileSystem/fsOperation';
 
 //Creates new github object
 function gitHub() {
@@ -49,10 +49,6 @@ async function init() {
     gistRecord = helpers.parseJSON(helpers.credentials.decrypt(content));
   }
   window.gistRecord = GistRecord(gistRecord);
-}
-
-function fileError(code) {
-  dialogs.alert(strings.error, helpers.getErrorMessage(code));
 }
 
 function error(err) {
@@ -224,7 +220,7 @@ function GitRecord(obj) {
           resolve(record);
         })
         .catch((err) => {
-          if (err.code) fileError(err.code);
+          helpers.error(err);
           reject(err);
         });
     });
@@ -284,10 +280,7 @@ function GitRecord(obj) {
         if (echo) toast(echo);
       })
       .catch((err) => {
-        if (err.code) {
-          fileError(err.code);
-        }
-        console.error(err);
+        helpers.error(err);
       });
   }
 
@@ -366,7 +359,7 @@ function Gist(id, files, isNew, _public) {
           if (res.status === 200) {
             if (isDelete) {
               delete _this.files[name];
-              editorManager.removeFile(getFile(name), true);
+              getFile(name)?.remove(true);
             }
 
             gistRecord.update(_this);
@@ -527,8 +520,7 @@ function GistRecord(obj) {
         if (echo) toast(echo);
       })
       .catch((err) => {
-        console.error(err);
-        if (err.code) fileError(err.code);
+        helpers.error(err);
       });
   }
 

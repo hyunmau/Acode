@@ -4,14 +4,13 @@ import Mustache from 'mustache';
 import template from './customTheme.hbs';
 import Page from '../../components/page';
 import color from '../../components/dialogboxes/color';
-import helpers from '../../lib/utils/helpers';
+import helpers from '../../utils/helpers';
 import constants from '../../lib/constants';
-import confirm from '../../components/dialogboxes/confirm';
 import select from '../../components/dialogboxes/select';
+import dialogs from '../../components/dialogs';
 
 export default function CustomThemeInclude() {
   const $page = Page(`${strings['custom']} ${strings['theme']}`.capitalize());
-  let unsaved = false;
 
   $page.header.append(
     tag('span', {
@@ -77,37 +76,43 @@ export default function CustomThemeInclude() {
       if (action === 'set-color') {
         const name = $target.getAttribute('name');
         const defaultValue = $target.getAttribute('value');
-        color(defaultValue).then((color) => {
-          appSettings.value.customTheme[name] = color;
-          appSettings.update();
-          const scrolltop = $page.get('#custom-theme').scrollTop;
-          render();
-          $page.get('#custom-theme').scrollTop = scrolltop;
-          if ($page.header.text.slice(-1) !== '*') $page.header.text += ' *';
-        });
+        color(defaultValue)
+          .then((color) => {
+            appSettings.value.customTheme[name] = color;
+            appSettings.update();
+            const scrolltop = $page.get('#custom-theme').scrollTop;
+            render();
+            $page.get('#custom-theme').scrollTop = scrolltop;
+            const $color = $target.get('.icon.color');
+            if ($color) {
+              $color.style.color = color;
+            }
+            if ($page.header.text.slice(-1) !== '*') $page.header.text += ' *';
+          });
 
         return;
       }
 
       if (action === 'reset-theme') {
-        confirm(strings['info'].toUpperCase(), strings['reset warning']).then(
-          () => {
+        dialogs.confirm(strings['info'].toUpperCase(), strings['reset warning'])
+          .then((confirmation) => {
+            if (!confirmation) return;
             appSettings.reset('customTheme');
             render();
             updateTheme();
-          },
-        );
+          });
       }
     }
   }
 
   function render() {
-    const customThemeColor = appSettings.value.customTheme;
-    const colors = Object.keys(customThemeColor).map((color) => {
+    const { customTheme } = appSettings;
+    const { customTheme: userSaved } = appSettings.value;
+    const colors = Object.keys(customTheme).map((color) => {
       return {
         color,
-        value: customThemeColor[color],
-        text: color.replace(/-/g, ' ').trim(),
+        value: userSaved[color] || customTheme[color],
+        text: color.replace(/-/g, ' ').trim().capitalize(0),
       };
     });
     const html = Mustache.render(template, { colors });
@@ -122,6 +127,8 @@ export default function CustomThemeInclude() {
       appSettings.value.customTheme,
     );
 
-    window.restoreTheme();
+    setTimeout(() => {
+      restoreTheme();
+    }, 0);
   }
 }

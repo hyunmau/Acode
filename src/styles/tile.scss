@@ -9,10 +9,10 @@ header {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     box-shadow: 0 2px 4px var(--box-shadow-color);
     color: rgb(255, 255, 255);
-    color: var(--text-main-color);
+    color: var(--primary-text-color);
 
-    > .text {
-      pointer-events: unset !important;
+    >.text {
+      pointer-events: all !important;
       margin: auto;
       font-weight: bold;
       font-size: 1.2em;
@@ -41,15 +41,20 @@ header {
     pointer-events: none;
   }
 
-  *:not([action]) {
+  * {
     pointer-events: none;
+  }
+
+  [data-action],
+  [action] {
+    pointer-events: all !important;
   }
 
   &.cut {
     opacity: 0.6;
   }
 
-  > .text {
+  >.text {
     flex: 1;
     white-space: nowrap;
     overflow: hidden;

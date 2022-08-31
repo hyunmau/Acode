@@ -5,12 +5,13 @@ import tag from 'html-tag-js';
 import mustache from 'mustache';
 import mimeType from 'mime-types';
 import Page from '../../components/page';
-import helpers from '../../lib/utils/helpers';
+import helpers from '../../utils/helpers';
 import dialogs from '../../components/dialogs';
 import git from '../../lib/git';
 import searchBar from '../../components/searchbar';
+import EditorFile from '../../lib/editorFile';
 
-export default function RepoInclude(owner, repoName) {
+export default async function RepoInclude(owner, repoName) {
   let $page;
   const $content = tag.parse(_template);
   const $navigation = $content.querySelector('.navigation');
@@ -29,7 +30,7 @@ export default function RepoInclude(owner, repoName) {
     },
   };
   let currentTree = { list: [], name: '', sha: '', scroll: 0 };
-  let branch;
+  let thisBranch;
   const branches = [];
   const input1 = {
     id: 'from',
@@ -48,90 +49,78 @@ export default function RepoInclude(owner, repoName) {
   const path = [];
   let hideAd = false; // If user select a file to open, hide the ad
 
-  dialogs.loader.create(repoName, strings.loading + '...');
-  repo
-    .listBranches()
-    .then((res) => {
-      dialogs.loader.destroy();
-      const data = res.data;
-      data.map((branch) => branches.push(branch.name));
-      branches.push(['add', strings['new branch'], 'add']);
-      return dialogs.select(strings['select branch'], branches);
-    })
-    .then((res) => {
-      if (res === 'add') {
-        addBranch();
-      } else {
-        branch = res;
-        getRepo();
-      }
-    })
-    .catch((err) => {
-      helpers.error(err);
-      dialogs.loader.destroy();
-    });
-
-  function addBranch() {
-    dialogs
-      .multiPrompt(strings['create new branch'], [input1, input2])
-      .then((res) => {
-        const from = res.from;
-        branch = res.branch;
-        dialogs.loader.create('', strings.loading + '...');
-        return repo.createBranch(from, branch);
-      })
-      .then(getRepo)
-      .catch((err) => {
-        helpers.error(err);
-      })
-      .finally(() => {
-        dialogs.loader.destroy();
-      });
+  try {
+    dialogs.loader.create(repoName, strings.loading + '...');
+    const { data } = await repo.listBranches();
+    dialogs.loader.destroy();
+    data.map((branch) => branches.push(branch.name));
+    branches.push(['add', strings['new branch'], 'add']);
+    const branch = await dialogs.select(strings['select branch'], branches);
+    if (branch === 'add') {
+      addBranch();
+    } else {
+      thisBranch = branch;
+      getRepo();
+    }
+  } catch (error) {
+    helpers.error(err);
   }
 
-  function getRepo() {
-    dialogs.loader.create(repoName, strings.loading + '...');
-    repo
-      .getSha(branch, '')
-      .then((res) => {
-        const list = transofrmRepoList(res.data);
-        $page = Page(repoName + ` (${branch})`, {
-          lead: tag('span', {
-            className: 'icon clearclose',
-            attr: {
-              action: 'close',
-            },
-          }),
-        });
-        cachedTree['/'].list = list;
-        navigate('/', '/');
+  async function addBranch() {
+    try {
+      dialogs.loader.destroy();
+      const { from, branch } = await dialogs.multiPrompt(
+        strings['create new branch'],
+        [input1, input2],
+      );
+      dialogs.loader.create('', strings.loading + '...');
+      thisBranch = branch;
+      await repo.createBranch(from, branch);
+      await getRepo(branch);
+    } catch (error) {
+      helpers.error(err);
+    }
+  }
 
-        $page.addEventListener('click', handleClick);
-        $page.body = $content;
-        $page.header.append($search);
-        app.append($page);
-        helpers.showAd();
-
-        actionStack.setMark();
-        actionStack.push({
-          id: 'repo',
-          action: $page.hide,
-        });
-
-        $page.onhide = function () {
-          helpers.hideAd(hideAd);
-          actionStack.pop();
-          $page.removeEventListener('click', handleClick);
-          actionStack.clearFromMark();
-          actionStack.remove('repo');
-        };
-      })
-      .catch((err) => {
-        helpers.error(err);
-      })
-      .finally(() => {
-        dialogs.loader.destroy();
+  async function getRepo() {
+    try {
+      dialogs.loader.create(repoName, strings.loading + '...');
+      const { data } = await repo.getSha(thisBranch, '');
+      const list = transofrmRepoList(data);
+      $page = Page(repoName + ` (${thisBranch})`, {
+        lead: tag('span', {
+          className: 'icon clearclose',
+          attr: {
+            action: 'close',
+          },
+        }),
       });
+      cachedTree['/'].list = list;
+      navigate('/', '/');
+
+      $page.addEventListener('click', handleClick);
+      $page.body = $content;
+      $page.header.append($search);
+      app.append($page);
+      helpers.showAd();
+
+      actionStack.setMark();
+      actionStack.push({
+        id: 'repo',
+        action: $page.hide,
+      });
+
+      $page.onhide = function () {
+        helpers.hideAd(hideAd);
+        $page.removeEventListener('click', handleClick);
+        actionStack.clearFromMark();
+        actionStack.remove('repo');
+      };
+    } catch (error) {
+      helpers.error(err);
+    } finally {
+      dialogs.loader.destroy();
+    }
   }
 
   /**
@@ -268,8 +257,8 @@ export default function RepoInclude(owner, repoName) {
     });
 
     return helpers.sortDir(list, {
-      showHiddenFiles: 'on',
-      sortByName: 'on',
+      showHiddenFiles: true,
+      sortByName: true,
     });
   }
 
@@ -326,14 +315,14 @@ export default function RepoInclude(owner, repoName) {
           sha,
           data,
           name,
-          branch,
+          branch: thisBranch,
           repo: repoName,
           path: path.slice(1).join('/'),
           owner,
         });
 
         hideAd = true;
-        editorManager.addNewFile(name, {
+        new EditorFile(name, {
           type: 'git',
           record,
           text: data,
@@ -341,6 +330,8 @@ export default function RepoInclude(owner, repoName) {
         });
 
         $page.hide();
+        actionStack.pop();
+        actionStack.pop();
       } catch (err) {
         error(err);
       } finally {

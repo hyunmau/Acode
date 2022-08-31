@@ -1,9 +1,16 @@
 import Irid from 'irid';
 import constants from './constants';
-import fsOperation from './fileSystem/fsOperation';
-import Url from './utils/Url';
+import fsOperation from '../fileSystem/fsOperation';
+import Url from '../utils/Url';
+
+let busy = false;
+let lastCall;
 
 export default async function restoreTheme(darken) {
+  if (busy) {
+    lastCall = darken;
+    return;
+  }
   if (darken && document.body.classList.contains('loading')) return;
 
   let theme = DOES_SUPPORT_THEME ? appSettings.value.appTheme : 'default';
@@ -29,13 +36,22 @@ export default async function restoreTheme(darken) {
   let hexColor = darken ? themeData.darken : themeData.primary;
 
   app.setAttribute('theme', theme);
-  system.setUiTheme(hexColor, type);
+  busy = true;
+  system.setUiTheme(hexColor, type, () => {
+    busy = false;
+    if (lastCall !== undefined) {
+      restoreTheme(lastCall);
+      lastCall = undefined;
+    }
+  }, (error) => {
+    console.error(error);
+  });
 
   if (DOES_SUPPORT_THEME) {
     document.body.setAttribute('theme-type', type);
     const style = getComputedStyle(app);
     const loaderFile = Url.join(ASSETS_DIRECTORY, 'res/tail-spin.svg');
-    const textColor = style.getPropertyValue('--text-main-color').trim();
+    const textColor = style.getPropertyValue('--primary-text-color').trim();
     const svgName = '__tail-spin__.svg';
     const img = Url.join(DATA_STORAGE, svgName);
 
@@ -51,7 +67,6 @@ export default async function restoreTheme(darken) {
       }
       const text = svg.replace(/#fff/g, textColor);
       await fs.writeFile(text);
-      app.style.cssText = `--tail-spin: url(${img})`;
     } catch (error) {
       console.error(error);
     }

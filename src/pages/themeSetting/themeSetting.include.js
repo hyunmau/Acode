@@ -8,7 +8,7 @@ import $_list_item from './list-item.hbs';
 import searchBar from '../../components/searchbar';
 import dialogs from '../../components/dialogs';
 import CustomTheme from '../customTheme/customTheme';
-import helpers from '../../lib/utils/helpers';
+import helpers from '../../utils/helpers';
 
 export default function () {
   const $page = Page(strings.theme.capitalize());
@@ -24,6 +24,7 @@ export default function () {
   });
   let editor = ace.edit($themePreview);
 
+  editor.setOption('useWorker', false);
   editor.setTheme(appSettings.value.editorTheme);
   editor.setFontSize(appSettings.value.fontSize);
   editor.session.setOptions({
@@ -46,7 +47,7 @@ export default function () {
       id: 'theme-preview-header',
     }),
   );
-  $themePreview.classList.add(appSettings.value.editorFont);
+  editor.resize(true);
 
   actionStack.push({
     id: 'appTheme',
@@ -75,9 +76,11 @@ export default function () {
       html = '',
       defaultValue = () => false;
 
-    if (mode === 'editor' && innerHeight * 0.3 >= 120)
+    if (mode === 'editor' && innerHeight * 0.3 >= 120) {
       $container.append($themePreview);
-    else $themePreview.remove();
+    } else {
+      $themePreview.remove();
+    }
 
     if (mode === 'app') {
       if (!DOES_SUPPORT_THEME)
@@ -175,9 +178,6 @@ export default function () {
   function onSelectAppTheme(res, type) {
     const theme = constants.appThemeList[res];
     if (!theme) return;
-
-    const link =
-      'https://play.google.com/store/apps/details?id=com.foxdebug.acode';
     if (!theme.isFree && IS_FREE_VERSION) {
       dialogs
         .box(
@@ -186,7 +186,7 @@ export default function () {
           'Please support this project by buying the paid version.',
         )
         .onhide(() => {
-          system.openInBrowser(link);
+          system.openInBrowser(constants.PAID_VERSION);
         });
       return;
     }

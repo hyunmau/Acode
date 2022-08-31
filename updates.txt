@@ -1,3 +1,16 @@
+version 1.6.0 beta
+☞ Updated custom theme settings
+☞ Option to add plugin source
+☞ Set custom port for preview in app settings
+☞ New option find file
+☞ Stability improvement
+☞ UI improvement
+☞ Fixed keyboard issues
+☞ Fixed tap hold to select text
+☞ Fixed loading files using FTP/SFTP
+☞ Fixed File checking
+☞ Fixed settings
+
 version 1.6.0
 ☞ Supports plugin
 ☞ The console can log HTML code
@@ -8,6 +21,7 @@ version 1.6.0
 ☞ Updated Ace editor.
 ☞ Added horizontal padding.
 ☞ Changed syntax highlighting is saved.
+☞ Fixed many keyboard bugs.
 ☞ Various fixes.
 
 version 1.5.5

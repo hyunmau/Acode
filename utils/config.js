@@ -17,7 +17,7 @@ const exec = promisify(require('child_process').exec);
   const htmlpath = path.resolve(__dirname, '../www/index.html');
   const logopath = path.resolve(
     __dirname,
-    '../res/icon/android/values/ic_launcher_background.xml',
+    '../res/android/values/ic_launcher_background.xml',
   );
 
   const logoTextPaid = `<?xml version="1.0" encoding="utf-8"?>
@@ -70,11 +70,6 @@ const exec = promisify(require('child_process').exec);
       for (let platform of platforms) {
         if (!platform) continue;
 
-        let version;
-        if (platform === 'android') {
-          version = '@9';
-        }
-
         promises.push(
           (async () => {
             console.log(
@@ -91,9 +86,9 @@ const exec = promisify(require('child_process').exec);
               else console.log('DONE! Removing admob-plus-cordova');
             }
 
-            const { stderr } = await exec(`yarn clean ${platform} ${platform + version}`);
+            const { stderr } = await exec(`yarn clean`);
             if (stderr) console.error(stderr);
-            else console.log('DONE! Cleaning and reinstalling platform');
+            else console.log('DONE! Reinstalling platform');
 
           })(),
         );

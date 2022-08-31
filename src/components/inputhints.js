@@ -52,6 +52,7 @@ function inputhints($input, hints, onSelect) {
     const action = $el.getAttribute('action');
     if (action !== 'hint') return;
     const value = $el.getAttribute('value');
+    if (!value) return;
     $input.value = $el.textContent;
     if (onSelect) onSelect(value);
     else $input.dataset.value = value;
@@ -181,12 +182,9 @@ function inputhints($input, hints, onSelect) {
     $input.removeEventListener('input', oninput);
   }
 
-  function calcHeight() {
-
-  }
-
   return {
     getSelected: () => $hintingContainer.get('.active'),
+    container: $hintingContainer,
   }
 }
 

@@ -11,7 +11,7 @@ import '../styles/contextMenu.scss';
 import '../styles/dialogs.scss';
 import '../styles/help.scss';
 import '../styles/overrideAceStyle.scss';
-import './ace/modelist';
+import '../ace/modelist';
 import '../components/WebComponents/components';
 import tag from 'html-tag-js';
 import mustache from 'mustache';
@@ -21,18 +21,17 @@ import sidenav from '../components/sidenav';
 import contextMenu from '../components/contextMenu';
 import EditorManager from './editorManager';
 import ActionStack from './actionStack';
-import helpers from './utils/helpers';
+import helpers from '../utils/helpers';
 import Settings from './settings';
 import constants from './constants';
-import intentHandler from './handlers/intent';
+import intentHandler from '../handlers/intent';
 import openFolder from './openFolder';
-import arrowkeys from './handlers/arrowkeys';
-import keyBindings from './keyBindings';
-import quickTools from './handlers/quickTools';
-import loadPolyFill from './utils/polyfill';
-import Url from './utils/Url';
+import arrowkeys from '../handlers/arrowkeys';
+import quickTools from '../handlers/quickTools';
+import loadPolyFill from '../utils/polyfill';
+import Url from '../utils/Url';
 import applySettings from './applySettings';
-import fsOperation from './fileSystem/fsOperation';
+import fsOperation from '../fileSystem/fsOperation';
 import run from './run';
 import toast from '../components/toast';
 import $_menu from '../views/menu.hbs';
@@ -41,17 +40,24 @@ import Icon from '../components/icon';
 import restoreTheme from './restoreTheme';
 import openFiles from './openFiles';
 import loadPlugins from './loadPlugins';
-import pluginServer from './handlers/pluginServer';
 import checkPluginsUpdate from './checkPluginsUpdate';
 import plugins from '../pages/plugins/plugins';
 import Acode from './acode';
-import createPluginServer from './createPluginServer';
+import ajax from '@deadlyjack/ajax';
+import lang from './lang';
+import EditorFile from './editorFile';
 
-loadPolyFill.apply(window);
 window.onload = Main;
 
 async function Main() {
   const oldPreventDefault = TouchEvent.prototype.preventDefault;
+
+  ajax.response = (xhr) => {
+    return xhr.response;
+  };
+
+  loadPolyFill.apply(window);
+
   TouchEvent.prototype.preventDefault = function () {
     if (this.cancelable) {
       oldPreventDefault.bind(this)();
@@ -68,11 +74,11 @@ async function Main() {
       ad.show();
     }
   });
+
   document.addEventListener('deviceready', ondeviceready);
 }
 
 async function ondeviceready() {
-  const language = navigator.language.toLowerCase();
   const oldRURL = window.resolveLocalFileSystemURL;
   const {
     externalCacheDirectory, //
@@ -80,15 +86,12 @@ async function ondeviceready() {
     cacheDirectory,
     dataDirectory,
   } = cordova.file;
-  let lang = 'en-us';
 
   iap.startConnection();
-  window.root = tag(window.root);
-  window.app = tag(document.body);
+  window.root = tag.get('#root');
+  window.app = document.body;
   window.addedFolder = [];
-  window.fileClipBoard = null;
   window.restoreTheme = restoreTheme;
-  window.saveInterval = null;
   window.editorManager = null;
   window.toastQueue = [];
   window.toast = toast;
@@ -136,17 +139,20 @@ async function ondeviceready() {
   window.acode = new Acode();
 
   system.requestPermission('android.permission.WRITE_EXTERNAL_STORAGE');
-  localStorage.versionCode = BuildInfo.versionCode;
-  document.body.setAttribute('data-version', 'v' + BuildInfo.version);
+
+  const { versionCode } = BuildInfo;
+
+  if (parseInt(localStorage.versionCode) !== versionCode) {
+    system.clearCache();
+  }
+
+  localStorage.versionCode = versionCode;
+  document.body.setAttribute('data-version', `v${BuildInfo.version} (${versionCode})`);
   acode.setLoadingMessage('Loading settings...');
 
   window.resolveLocalFileSystemURL = function (url, ...args) {
     oldRURL.call(this, Url.safe(url), ...args);
   };
-
-  if (navigator.app && typeof navigator.app.clearCache === 'function') {
-    navigator.app.clearCache();
-  }
 
   setTimeout(() => {
     if (document.body.classList.contains('loading'))
@@ -156,24 +162,13 @@ async function ondeviceready() {
       );
   }, 1000 * 10);
 
-  if (language in constants.langList) {
-    lang = language;
-  }
   acode.setLoadingMessage('Loading settings...');
-  await appSettings.init(lang);
+  await appSettings.init();
 
   if (localStorage.versionCode < 150) {
     localStorage.clear();
     appSettings.reset();
     window.location.reload();
-  }
-
-  try {
-    acode.pluginServer = await createPluginServer();
-    acode.pluginServer.setOnRequestHandler(pluginServer);
-  } catch (error) {
-    console.error(error);
-    toast('Plugins loading failed!');
   }
 
   if (IS_FREE_VERSION && admob) {
@@ -187,10 +182,6 @@ async function ondeviceready() {
         });
         window.ad = ad;
       });
-
-    document.addEventListener('admob.banner.size', (event) => {
-      console.log(event);
-    });
   }
 
   acode.setLoadingMessage('Loading custom theme...');
@@ -205,14 +196,7 @@ async function ondeviceready() {
   );
 
   acode.setLoadingMessage('Loading language...');
-  try {
-    const languageFile = `${ASSETS_DIRECTORY}/lang/${appSettings.value.lang}.json`;
-    const fs = fsOperation(languageFile);
-    const text = await fs.readFile('utf-8');
-    window.strings = helpers.parseJSON(text);
-  } catch (error) {
-    alert('Unable to load language file.');
-  }
+  await lang.set(appSettings.value.lang);
 
   acode.setLoadingMessage('Initializing GitHub...');
   await git.init();
@@ -270,6 +254,7 @@ async function loadApp() {
           file_read_only: !file.editable,
           file_info: !!file.uri,
           file_eol: file.eol,
+          copy_text: !!editorManager.editor.getCopyText(),
         }),
       );
     },
@@ -285,7 +270,7 @@ async function loadApp() {
       run();
     },
     oncontextmenu() {
-      run.runFile();
+      run(false, "inapp", true);
     },
     style: {
       fontSize: '1.2em',
@@ -316,75 +301,49 @@ async function loadApp() {
   });
   const folders = helpers.parseJSON(localStorage.folders);
   const files = helpers.parseJSON(localStorage.files) || [];
-  let registeredKey = '';
+  const editorManager = await EditorManager($sidebar, $header, $main);
   //#endregion
 
+  window.editorManager = editorManager;
   acode.$quickToolToggler = $quickToolToggler;
   acode.$headerToggler = $headerToggler;
 
   actionStack.onCloseApp = () => acode.exec('save-state');
   $sidebar.setAttribute('empty-msg', strings['open folder']);
-  window.editorManager = await EditorManager($sidebar, $header, $main);
 
-  const fmode = appSettings.value.floatingButtonActivation;
-  const activationMode = fmode === 'long tap' ? 'oncontextmenu' : 'onclick';
-  $headerToggler[activationMode] = function () {
+  $headerToggler.onclick = function () {
     root.classList.toggle('show-header');
     this.classList.toggle('keyboard_arrow_left');
     this.classList.toggle('keyboard_arrow_right');
   };
-  $quickToolToggler[activationMode] = function () {
+  $quickToolToggler.onclick = function () {
     acode.exec('toggle-quick-tools');
   };
 
   //#region rendering
   applySettings.beforeRender();
-  window.restoreTheme();
   root.appendOuter($header, $main, $footer, $floatingNavToggler, $headerToggler, $quickToolToggler);
-  if (!appSettings.value.floatingButton) {
-    root.classList.add('hide-floating-button');
-  }
   applySettings.afterRender();
   //#endregion
-
-  //#region loading-files
-  acode.setLoadingMessage('Loading folders...');
-  if (Array.isArray(folders)) {
-    folders.forEach((folder) => openFolder(folder.url, folder.opts));
-  }
-
-  if (Array.isArray(files) && files.length) {
-    acode.setLoadingMessage(`Loading files (0/${files.length})`);
-    const res = await openFiles(files, (count) => {
-      acode.setLoadingMessage(`Loading files (${count}/${files.length})`);
-    });
-    if (res.success === 0) {
-      editorManager.addNewFile();
-    }
-    onEditorUpdate(false);
-  } else {
-    editorManager.addNewFile();
-  }
 
   //#endregion
   setTimeout(() => {
     document.body.removeAttribute('data-small-msg');
     app.classList.remove('loading', 'splash');
-  }, 1000);
+  }, 500);
 
   //#region Add event listeners
-  root.on('show', mainPageOnShow);
   editorManager.onupdate = onEditorUpdate;
-  editorManager.on('rename-file', onRenameOrSwitchFile);
-  editorManager.on('switch-file', onRenameOrSwitchFile);
+  root.on('show', mainPageOnShow);
   app.addEventListener('click', onClickApp);
+  editorManager.on('rename-file', onFileUpdate);
+  editorManager.on('switch-file', onFileUpdate);
+  editorManager.on('file-loaded', onFileUpdate);
   $fileMenu.addEventListener('click', handleMenu);
   $mainMenu.addEventListener('click', handleMenu);
   $footer.addEventListener('touchstart', footerTouchStart);
   $footer.addEventListener('contextmenu', footerOnContextMenu);
   document.addEventListener('backbutton', actionStack.pop);
-  document.addEventListener('keydown', handleMainKeyDown);
-  document.addEventListener('keyup', handleMainKeyUp);
   document.addEventListener('menubutton', $sidebar.toggle);
   navigator.app.overrideButton('menubutton', true);
   system.setIntentHandler(intentHandler, intentHandler.onError);
@@ -400,6 +359,25 @@ async function loadApp() {
     acode.exec('check-files');
   });
   //#endregion
+
+  acode.setLoadingMessage('Loading folders...');
+  if (Array.isArray(folders)) {
+    folders.forEach((folder) => openFolder(folder.url, folder.opts));
+  }
+
+  if (Array.isArray(files) && files.length) {
+    openFiles(files)
+      .then(() => {
+        onEditorUpdate(undefined, false);
+      })
+      .catch((error) => {
+        console.error(error);
+        toast('File loading failed!');
+      });
+  } else {
+    new EditorFile();
+    onEditorUpdate(undefined, false);
+  }
 
   checkPluginsUpdate()
     .then((updates) => {
@@ -428,8 +406,6 @@ async function loadApp() {
     })
     .catch(console.error);
 
-  onRenameOrSwitchFile();
-
   //load plugins
   loadPlugins()
     .then(() => { })
@@ -440,48 +416,12 @@ async function loadApp() {
 
   /**
    *
-   * @param {KeyboardEvent} e
-   */
-  function handleMainKeyDown(e) {
-    registeredKey = helpers.getCombination(e);
-  }
-
-  /**
-   *
-   * @param {KeyboardEvent} e
-   */
-  function handleMainKeyUp(e) {
-    let key = helpers.getCombination(e);
-    if (registeredKey && key !== registeredKey) return;
-
-    const { editor } = editorManager;
-
-    const isFocused = editor.textInput.getElement() === document.activeElement;
-    if (key === 'escape' && (!actionStack.length || isFocused))
-      e.preventDefault();
-    if (actionStack.length || isFocused) return;
-    for (let name in keyBindings) {
-      const obj = keyBindings[name];
-      const binding = (obj.key || '').toLowerCase();
-      if (
-        binding === key &&
-        constants.COMMANDS.includes(name) &&
-        'action' in obj
-      )
-        acode.exec(obj.action);
-    }
-
-    registeredKey = null;
-  }
-
-  /**
-   *
    * @param {MouseEvent} e
    */
   function handleMenu(e) {
     const $target = e.target;
     const action = $target.getAttribute('action');
-    const value = $target.getAttribute('value');
+    const value = $target.getAttribute('value') || undefined;
     if (!action) return;
 
     if ($mainMenu.contains($target)) $mainMenu.hide();
@@ -507,45 +447,36 @@ async function loadApp() {
     editorManager.editor.focus();
   }
 
-  function onEditorUpdate(saveState = true) {
-    const activeFile = editorManager.activeFile;
-    const $save = $footer.querySelector('[action=save]');
+  function onEditorUpdate(mode, saveState = true) {
+    const { activeFile } = editorManager;
 
     if (!$editMenuToggler.isConnected) {
       $header.insertBefore($editMenuToggler, $header.lastChild);
     }
 
-    if (activeFile) {
-      if (activeFile.isUnsaved) {
-        activeFile.assocTile.classList.add('notice');
-        if ($save) $save.classList.add('notice');
-      } else {
-        activeFile.assocTile.classList.remove('notice');
-        if ($save) $save.classList.remove('notice');
+    if (mode === 'switch-file') {
+      if (appSettings.value.rememberFiles && activeFile) {
+        localStorage.setItem('lastfile', activeFile.id);
       }
+      return;
     }
 
     if (saveState) acode.exec('save-state');
   }
 
-  function onRenameOrSwitchFile() {
-    run
-      .checkRunnable()
-      .then((res) => {
-        if (res) {
-          editorManager.activeFile.canRun = true;
-          $runBtn.setAttribute('run-file', res);
-          $header.insertBefore($runBtn, $header.lastChild);
-        } else {
-          editorManager.activeFile.canRun = false;
-          $runBtn.removeAttribute('run-file');
-          $runBtn.remove();
-        }
-      })
-      .catch((err) => {
-        $runBtn.removeAttribute('run-file');
+  async function onFileUpdate() {
+    try {
+      const { activeFile } = editorManager;
+      const canRun = await activeFile?.canRun();
+      if (canRun) {
+        $header.insertBefore($runBtn, $header.lastChild);
+      } else {
         $runBtn.remove();
-      });
+      }
+    } catch (error) {
+      $runBtn.removeAttribute('run-file');
+      $runBtn.remove();
+    }
   }
 }
 

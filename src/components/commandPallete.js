@@ -1,11 +1,10 @@
 import tag from 'html-tag-js';
-import Commands from '../lib/ace/commands';
-import helpers from '../lib/utils/helpers';
+import helpers from '../utils/helpers';
 import inputhints from './inputhints';
 
-export async function commandPallete() {
+export default async function commandPallete() {
   const recentlyUsedCommands = RecentlyUsedCommands();
-  const commands = await Commands();
+  const commands = Object.values(editorManager.editor.commands.commands);
   const $input = tag('input', {
     type: 'search',
     placeholder: 'Type command',
@@ -22,28 +21,9 @@ export async function commandPallete() {
     children: [$input],
   });
 
-  inputhints($input, ((setHints) => {
-    recentlyUsedCommands.commands.forEach((name) => {
-      const command = Object.assign({}, commands.find(command => command.name === name));
-      if (command) {
-        command.recentlyUsed = true;
-        commands.unshift(command);
-      }
-    });
-    setHints(
-      commands.map(({ name, description, bindKey, recentlyUsed }) => ({
-        value: name,
-        text: `<span ${recentlyUsed ? `data-str='${strings['recently used']}'` : ''}>${description ?? name}</span><small>${bindKey?.win ?? ''}</small>`,
-      })),
-    );
-  }), (value) => {
-    const command = commands.find(({ name }) => name === value);
-    if (!command) return;
-    recentlyUsedCommands.push(value);
-    command.exec(editorManager.editor);
-    remove();
-  });
+  const { container } = inputhints($input, generateHints, onselect);
 
+  // container.id = 'command-pallete-hint-box';
   actionStack.push({
     id: 'command-pallete',
     action: remove,
@@ -57,6 +37,30 @@ export async function commandPallete() {
     window.restoreTheme();
     $mask.remove();
     $pallete.remove();
+  }
+
+  function generateHints(setHints) {
+    recentlyUsedCommands.commands.forEach((name) => {
+      const command = Object.assign({}, commands.find(command => command.name === name));
+      if (command) {
+        command.recentlyUsed = true;
+        commands.unshift(command);
+      }
+    });
+    const hints = commands.map(({ name, description, bindKey, recentlyUsed }) => ({
+      value: name,
+      text: `<span ${recentlyUsed ? `data-str='${strings['recently used']}'` : ''}>${description ?? name}</span><small>${bindKey?.win ?? ''}</small>`,
+    }));
+
+    setHints(hints);
+  }
+
+  function onselect(value) {
+    const command = commands.find(({ name }) => name === value);
+    if (!command) return;
+    recentlyUsedCommands.push(value);
+    command.exec(editorManager.editor);
+    remove();
   }
 }
 

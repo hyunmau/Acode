@@ -1,6 +1,6 @@
 import tag from 'html-tag-js';
 import mustache from 'mustache';
-import helpers from '../../lib/utils/helpers';
+import helpers from '../../utils/helpers';
 import GithubLogin from '../login/login';
 import Page from '../../components/page';
 
@@ -9,7 +9,7 @@ import _menu from './menu.hbs';
 import './repos.scss';
 import Repo from '../repo/repo';
 import contextMenu from '../../components/contextMenu';
-import fs from '../../lib/fileSystem/internalFs';
+import fs from '../../fileSystem/internalFs';
 import dialogs from '../../components/dialogs';
 import git from '../../lib/git';
 import searchBar from '../../components/searchbar';
@@ -68,7 +68,6 @@ function ReposInclude() {
 
     repos.map((repo) => {
       const { language, size, updated_at } = repo;
-
       repo.size = (size / 1024).toFixed(2) + 'KB';
       repo.updated_at = new Date(updated_at).toLocaleDateString();
       repo.language = `file_type_${(language || 'text').toLowerCase()}`;
@@ -76,9 +75,7 @@ function ReposInclude() {
     const $content = tag.parse(mustache.render(_template, repos));
 
     $content.addEventListener('click', handleClick);
-
     $page.body = $content;
-
     app.append($page);
     helpers.showAd();
 
@@ -86,9 +83,8 @@ function ReposInclude() {
       id: 'repos',
       action: $page.hide,
     });
-    $page.onhide = function () {
+    $page.onhide = () => {
       helpers.hideAd();
-      actionStack.pop();
       actionStack.remove('repos');
     };
 

@@ -1,63 +1,57 @@
-import fsOperation from "./fileSystem/fsOperation";
-import Url from "./utils/Url";
+import EditorFile from './editorFile';
 
 /**
  * 
- * @param {Array<File>} files 
+ * @param {import('./editorFile').FileOptions[]} files 
  * @param {(count: number)=>void} callback
  */
-export default async function openFiles(files, callback) {
+export default async function openFiles(files) {
   const promises = [];
-  let count = 0;
-  for (let file of files) {
-    promises.push((async () => {
-      const {
-        id,
-        uri,
-        type,
-        readOnly,
-        filename,
-        encoding = 'utf-8',
-      } = file;
-      const render = files.length === 1 || id === localStorage.lastfile;
-      let options = {
-        ...file,
-        emitUpdate: false,
-        render,
-      };
+  let rendered = false;
 
-      try {
-        const fs = fsOperation(Url.join(CACHE_STORAGE, id));
-        options.text = await fs.readFile(encoding);
-      } catch (error) { }
+  recursiveOpenFile(files);
 
-      if (type === 'git') {
-        const record = await gitRecord.get(file.sha);
-        if (record) {
-          if (!options.text) options.text = record.data;
-          options.record = record;
-        }
-      } else if (type === 'gist') {
-        const gist = gistRecord.get(file.recordid, file.isNew);
-        if (gist) {
-          const gistFile = gist.files[filename];
-          if (!options.text) options.text = gistFile.content;
-          options.record = gist;
-        }
-      } else if (uri) {
-        const fs = fsOperation(uri);
-        const exsits = await fs.exists();
-        if (!options.text && exsits) {
-          options.text = await fs.readFile(encoding);
-        } else if (!readOnly && !exsits) {
-          options.isUnsaved = true;
-          options.deletedFile = true;
-        }
+  /**
+   * 
+   * @param {Array} files 
+   */
+  async function recursiveOpenFile(files) {
+    const file = files.shift();
+    if (!file) return;
+
+    await openFile(file);
+    if (files.length) {
+      if (files.length === 1 && !rendered) {
+        files[0].render = true;
       }
+      recursiveOpenFile(files);
+    }
+  }
 
-      if (typeof callback === 'function') callback(++count);
-      editorManager.addNewFile(filename, options);
-    })(file));
+  async function openFile(file) {
+    const { type, filename, render = false } = file;
+
+    const options = {
+      ...file,
+      render,
+      emitUpdate: false,
+    };
+
+    if (!rendered) rendered = render;
+
+    if (type === 'git') {
+      const record = await gitRecord.get(file.sha);
+      if (record) {
+        options.record = record;
+      }
+    } else if (type === 'gist') {
+      const gist = gistRecord.get(file.recordid, file.isNew);
+      if (gist) {
+        options.record = gist;
+      }
+    }
+
+    new EditorFile(filename, options);
   }
 
   const res = await Promise.allSettled(promises);

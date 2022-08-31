@@ -3,12 +3,12 @@ import { marked } from 'marked';
 import mustache from 'mustache';
 import $_console from '../views/console.hbs';
 import $_markdown from '../views/markdown.hbs';
-import helpers from './utils/helpers';
+import helpers from '../utils/helpers';
 import dialogs from '../components/dialogs';
 import git from './git';
 import constants from './constants';
-import fsOperation from './fileSystem/fsOperation';
-import Url from './utils/Url';
+import fsOperation from '../fileSystem/fsOperation';
+import Url from '../utils/Url';
 import openFolder from './openFolder';
 
 /**
@@ -24,7 +24,7 @@ async function run(
 ) {
 
   const activeFile = isConsole ? null : editorManager.activeFile;
-  if (!isConsole && !activeFile?.canRun) return;
+  if (!isConsole && !await activeFile?.canRun()) return;
 
   if (!isConsole && !localStorage.__init_runPreview) {
     localStorage.__init_runPreview = true;
@@ -40,7 +40,7 @@ async function run(
 
   let isLoading = false;
   let filename, pathName, extension;
-  let port = constants.PORT;
+  let port = appSettings.value.previewPort;
   let EXECUTING_SCRIPT = uuid + '_script.js';
   const MIMETYPE_HTML = mimeType.lookup('html');
   const CONSOLE_SCRIPT = uuid + '_console.js';
@@ -461,34 +461,5 @@ async function run(
     }
   }
 }
-
-run.checkRunnable = async function () {
-  try {
-    const activeFile = editorManager.activeFile;
-    if (activeFile.type === 'regular') {
-      const folder = openFolder.find(activeFile.uri);
-      if (folder) {
-        const url = Url.join(folder.url, 'index.html');
-        const fs = fsOperation(url);
-        if (await fs.exists()) {
-          return url;
-        }
-      }
-    }
-
-    const runnableFile = /\.((html?)|(md)|(js)|(svg))$/;
-    const filename = activeFile.filename;
-    if (runnableFile.test(filename)) return filename;
-
-    return null;
-  } catch (err) {
-    if (err instanceof Error) throw error;
-    else throw new Error(err);
-  }
-};
-
-run.runFile = () => {
-  run(undefined, undefined, true);
-};
 
 export default run;

@@ -4,18 +4,21 @@ import tag from "html-tag-js";
 import template from './plugins.hbs';
 import list from './list.hbs';
 import Page from "../../components/page";
-import helpers from "../../lib/utils/helpers";
+import helpers from "../../utils/helpers";
 import searchBar from "../../components/searchbar";
-import fsOperation from "../../lib/fileSystem/fsOperation";
-import Url from "../../lib/utils/Url";
+import fsOperation from "../../fileSystem/fsOperation";
+import Url from "../../utils/Url";
 import plugin from "../plugin/plugin";
+import dialogs from "../../components/dialogs";
+import constants from "../../lib/constants";
 
 /**
  * 
  * @param {Array<PluginJson>} updates 
  */
 export default function PluginsInclude(updates) {
-  const listJson = 'https://raw.githubusercontent.com/deadlyjack/acode-plugins/main/list.json';
+  const LOADING = 0;
+  const LOADED = 1;
   const $page = Page(strings['plugins']);
   const $search = tag('span', {
     className: 'icon search',
@@ -23,15 +26,25 @@ export default function PluginsInclude(updates) {
       action: 'search',
     },
   });
+  const $add = tag('span', {
+    className: 'icon add',
+    dataset: {
+      action: 'add-source'
+    },
+    onclick: addSource,
+  })
   const plugins = {
     all: [],
     installed: [],
   };
   let section = 'installed';
-  $page.body = tag.parse(
-    mustache.render(template, { msg: `${strings.loading}...` }),
-  );
-  $page.header.append($search);
+  let allState = LOADING;
+  let installedState = LOADING;
+
+  $page.body.innerHTML = mustache.render(template, {
+    msg: strings['loading...'],
+  });
+  $page.header.append($search, $add);
 
   actionStack.push({
     id: 'plugins',
@@ -57,24 +70,11 @@ export default function PluginsInclude(updates) {
     return;
   }
 
+  getAllPlugins();
   getInstalledPlugins()
     .then(() => {
       render();
     });
-
-  (async function () {
-    helpers.showTitleLoader();
-    try {
-      try {
-        await getAllPlugins();
-      } catch (error) { }
-    } catch (error) {
-      helpers.error(error);
-    } finally {
-      $page.get('#plugin-list')?.setAttribute('empty-msg', 'No plugins found');
-      helpers.removeTitleLoader();
-    }
-  })();
 
   function renderAll() {
     $page.get('[action="select"].active')?.classList.remove('active');
@@ -110,65 +110,64 @@ export default function PluginsInclude(updates) {
   }
 
   function render() {
+    const $list = $page.get('#plugin-list');
+    let emptyMsg = strings['no plugins found'];
     if (section === 'all') {
+      if (allState === LOADING) {
+        emptyMsg = strings['loading...'];
+      }
       renderAll();
-      return;
     }
 
     if (section === 'installed') {
+      if (installedState === LOADING) {
+        emptyMsg = strings['loading...'];
+      }
       renderInstalled();
-      return;
     }
+
+    $list.setAttribute('empty-msg', emptyMsg);
   }
 
   async function getAllPlugins() {
-    const file = await ajax({
-      url: listJson,
-      method: 'GET',
-      responseType: 'text',
-    });
-    plugins.all = helpers.parseJSON(file) || [];
+    try {
+      const installed = await fsOperation(PLUGIN_DIR).lsDir();
+      const file = await ajax({
+        url: constants.PLUGIN_LIST,
+        method: 'GET',
+        responseType: 'text',
+        contentType: 'application/x-www-form-urlencoded',
+      });
+      plugins.all = helpers.parseJSON(file) || [];
 
-    // To test and develop plugin, update host in file: '/res/network_security_config.xml:11:43'
-    // plugins.all.push({
-    //   name: 'Python local',
-    //   plugin: 'http://192.168.1.33:5500/plugin.json',
-    //   icon: 'http://192.168.1.33:5500/icon.png',
-    //   author: {
-    //     name: 'DeadlyJack',
-    //   }
-    // })
-
-    if (plugins.installed.length) {
-      plugins.installed.forEach((localPlugin) => {
-        const plugin = plugins.all.find((plugin) => plugin.name === localPlugin.name);
+      installed.forEach(({ url }) => {
+        const plugin = plugins.all.find(({ id }) => id === Url.basename(url));
         if (plugin) {
           plugin.installed = true;
-          plugin.plugin = localPlugin.plugin;
+          plugin.plugin = getLocalRes(plugin.id, 'plugin.json');
         }
       });
+      allState = LOADED;
+    } catch (error) {
+      helpers.error(error);
     }
   }
 
   async function getInstalledPlugins(updates) {
     const installed = await fsOperation(PLUGIN_DIR).lsDir();
-    const promises = [];
-    installed.forEach((item) => {
+    await Promise.all(installed.map(async (item) => {
       const id = Url.basename(item.url);
       if ((updates && updates.includes(id)) || !updates) {
-        promises.push(
-          fsOperation(
-            Url.join(item.url, 'plugin.json'),
-          ).readFile('json'),
-        );
+        const url = Url.join(item.url, 'plugin.json');
+        const plugin = await fsOperation(url).readFile('json');
+        const { id } = plugin;
+        const iconUrl = getLocalRes(id, 'icon.png');
+        plugin.icon = await helpers.toInternalUri(iconUrl);
+        plugin.plugin = getLocalRes(id, 'plugin.json');
+        plugins.installed.push(plugin);
       }
-    });
-
-    plugins.installed = await Promise.all(promises);
-    plugins.installed.forEach((localPlugin) => {
-      localPlugin.icon = getLocalRes(localPlugin.id, 'icon.png');
-      localPlugin.plugin = getLocalRes(localPlugin.id, 'plugin.json');
-    });
+    }));
+    installedState = LOADED;
   }
 
   function onIninstall(pluginId) {
@@ -191,5 +190,28 @@ export default function PluginsInclude(updates) {
 
   function getLocalRes(id, name) {
     return Url.join(PLUGIN_DIR, id, name);
+  }
+
+  async function addSource() {
+    const source = await dialogs.prompt('Enter plugin source', 'https://', 'url');
+    const json = Url.join(source, 'plugin.json');
+    try {
+      helpers.showTitleLoader();
+      const data = await ajax.get(json, {
+        responseType: 'json'
+      });
+
+      if (data) {
+        const { id } = data;
+        plugin({
+          installed: plugins.installed.includes(id),
+          plugin: json,
+        }, onIninstall, onUninstall);
+      }
+    } catch (error) {
+      helpers.error(error);
+    } finally {
+      helpers.removeTitleLoader();
+    }
   }
 }

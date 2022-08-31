@@ -1,43 +1,36 @@
-import quickTools from './handlers/quickTools';
+import quickTools from '../handlers/quickTools';
 import constants from './constants';
 
 export default {
   beforeRender() {
     //animation
-    if (!appSettings.value.animation) app.classList.add('no-animation');
+    appSettings.applyAnimationSetting();
 
     //full-screen
-    if (appSettings.value.fullscreen) acode.exec('enable-fullscreen');
-
-    //disable-floating-button
-    if (appSettings.value.disableFloatingButton)
-      root.classList.add('disable-floating-button');
+    if (appSettings.value.fullscreen) {
+      acode.exec('enable-fullscreen');
+    }
 
     //setup vibration
-    app.addEventListener('touchstart', function (e) {
-      const el = e.target;
-
-      if (el instanceof HTMLElement && el.hasAttribute('vibrate')) {
-        if (appSettings.value.vibrateOnTap)
-          navigator.vibrate(constants.VIBRATION_TIME);
+    app.addEventListener('click', function (e) {
+      const $target = e.target;
+      if ($target.hasAttribute('vibrate') && appSettings.value.vibrateOnTap) {
+        navigator.vibrate(constants.VIBRATION_TIME);
       }
     });
 
-    //setup autosave
-    const autoSave = parseInt(appSettings.value.autosave);
-    if (autoSave && autoSave >= 1000) {
-      saveInterval = setInterval(() => {
-        editorManager.files.map((file) => {
-          if (!file.readOnly && file.uri && file.isUnsaved && !file.isSaving)
-            acode.exec('save', false);
-        });
-      }, autoSave);
-    }
-
     system.setInputType(appSettings.value.keyboardMode);
+    window.restoreTheme();
   },
   afterRender() {
+    const { value: settings } = appSettings;
+    if (!settings.floatingButton) {
+      root.classList.add('hide-floating-button');
+    }
+
     //quick-tools
-    if (appSettings.value.quickTools) quickTools.actions('enable-quick-tools');
+    if (settings.quickTools) {
+      quickTools.actions('enable-quick-tools');
+    }
   },
 };

@@ -18,6 +18,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.PowerManager;
+import android.provider.Settings.Global;
 import android.view.View;
 import android.view.Window;
 import android.webkit.WebView;
@@ -88,6 +89,7 @@ public class System extends CordovaPlugin {
       case "has-permission":
       case "open-in-browser":
       case "launch-app":
+      case "get-global-setting":
         break;
       case "set-input-type":
         setInputType(arg1);
@@ -121,6 +123,16 @@ public class System extends CordovaPlugin {
                   getBoolean(args, 3),
                   callbackContext
                 );
+              }
+            }
+          );
+        return true;
+      case "clear-cache":
+        this.cordova.getActivity()
+          .runOnUiThread(
+            new Runnable() {
+              public void run() {
+                clearCache(callbackContext);
               }
             }
           );
@@ -182,6 +194,9 @@ public class System extends CordovaPlugin {
               case "launch-app":
                 launchApp(arg1, arg2, arg3, callbackContext);
                 break;
+              case "get-global-setting":
+                getGlobalSetting(arg1, callbackContext);
+                break;
               default:
                 break;
             }
@@ -230,6 +245,7 @@ public class System extends CordovaPlugin {
       }
 
       callback.success(1);
+      return;
     }
 
     callback.error("No permission passed to request.");
@@ -537,6 +553,7 @@ public class System extends CordovaPlugin {
       );
 
       callback.success();
+      return;
     }
 
     callback.error("Not suppported");
@@ -581,7 +598,12 @@ public class System extends CordovaPlugin {
 
         setStatusBarStyle(window);
         setNavigationBarStyle(window);
-      } catch (IllegalArgumentException ignore) {} catch (Exception ignore) {}
+        callback.success("OK");
+      } catch (IllegalArgumentException error) {
+        callback.error(error.toString());
+      } catch (Exception error) {
+        callback.error(error.toString());
+      }
     }
   }
 
@@ -710,6 +732,20 @@ public class System extends CordovaPlugin {
     } catch (PackageManager.NameNotFoundException e) {
       return false;
     }
+  }
+
+  private void getGlobalSetting(String setting, CallbackContext callback) {
+    int value = (int) Global.getFloat(
+      context.getContentResolver(),
+      setting,
+      -1
+    );
+    callback.success(value);
+  }
+
+  private void clearCache(CallbackContext callback) {
+    webView.clearCache(true);
+    callback.success("Cache cleared");
   }
 
   private void setInputType(String type) {

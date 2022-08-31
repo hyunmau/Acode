@@ -1,9 +1,9 @@
 import ajax from "@deadlyjack/ajax";
 import dialogs from "../components/dialogs";
-import fsOperation from "./fileSystem/fsOperation";
+import fsOperation from "../fileSystem/fsOperation";
 import loadPlugin from "./loadPlugin";
-import helpers from "./utils/helpers";
-import Url from "./utils/Url";
+import helpers from "../utils/helpers";
+import Url from "../utils/Url";
 
 /**
  * Installs a plugin.
@@ -37,31 +37,28 @@ export default async function installPlugin(plugin, host) {
       ajax({
         url: mainJs,
         method: 'GET',
+        contentType: 'application/x-www-form-urlencoded',
         responseType: 'arraybuffer',
-        xhr(xhr) {
-          xhr.onprogress = (e) => {
-            progress(plugin.name, e.loaded / e.total);
-          }
+        onprogress(loaded, total) {
+          progress(plugin.name, loaded / total);
         }
       }),
       ajax({
         url: Url.join(host, plugin.icon),
         method: 'GET',
+        contentType: 'application/x-www-form-urlencoded',
         responseType: 'arraybuffer',
-        xhr(xhr) {
-          xhr.onprogress = (e) => {
-            progress('icon', e.loaded / e.total);
-          }
+        onprogress(loaded, total) {
+          progress('icon', loaded / total);
         }
       }),
       ajax({
         url: Url.join(host, plugin.readme),
         method: 'GET',
+        contentType: 'application/x-www-form-urlencoded',
         responseType: 'arraybuffer',
-        xhr(xhr) {
-          xhr.onprogress = (e) => {
-            progress('readme', e.loaded / e.total);
-          }
+        onprogress(loaded, total) {
+          progress('readme', loaded / total);
         }
       }),
     );
@@ -107,11 +104,10 @@ export default async function installPlugin(plugin, host) {
                 await ajax({
                   url: Url.join(rootDir, file),
                   method: 'GET',
+                  contentType: 'application/x-www-form-urlencoded',
                   responseType: 'arraybuffer',
-                  xhr(xhr) {
-                    xhr.onprogress = (e) => {
-                      progress(file, e.loaded / e.total);
-                    }
+                  onprogress(loaded, total) {
+                    progress(file, loaded / total);
                   }
                 }),
               );

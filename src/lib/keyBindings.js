@@ -1,4 +1,9 @@
 export default {
+  findFile: {
+    description: 'Find a file',
+    key: 'Ctrl-P',
+    action: 'find-file',
+  },
   closeCurrentTab: {
     description: 'Close current tab.',
     key: 'Ctrl-Q',
@@ -60,7 +65,7 @@ export default {
     action: 'rename',
   },
   run: {
-    description: 'Preview HTML and MarkDownOpen previous file tab',
+    description: 'Run current file',
     key: 'F5',
     readOnly: false,
     action: 'run',
@@ -353,7 +358,7 @@ export default {
   },
   jumptomatching: {
     description: 'Jump to matching',
-    key: 'Ctrl-\\|Ctrl-P',
+    key: 'Ctrl-\\',
     readOnly: true,
   },
   selecttomatching: {
@@ -545,5 +550,17 @@ export default {
     description: 'Change language mode',
     key: 'Ctrl-M',
     readOnly: false,
+  },
+  increaseFontSize: {
+    description: 'Increase font size',
+    bindKey: 'Ctrl-+',
+  },
+  decreaseFontSize: {
+    description: 'Decrease font size',
+    bindKey: 'Ctrl+-',
+  },
+  resetFontSize: {
+    description: 'Reset font size',
+    bindKey: 'Ctrl+0|Ctrl-Numpad0',
   },
 };

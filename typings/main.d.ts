@@ -25,11 +25,12 @@ interface searchSettings {
 }
 
 interface Settings {
-  animation: boolean;
+  animation: 'system' | boolean;
   autosave: number;
   fileBrowser: fileBrowserSettings;
   maxFileSize: number;
   filesNotAllowed: string[];
+  formatter: Map<string, string>;
   search: searchSettings;
   lang: string;
   fontSize: string;
@@ -39,21 +40,19 @@ interface Settings {
   softTab: boolean;
   tabSize: number;
   linenumbers: boolean;
-  beautify: Array<string>;
+  formatOnSave: boolean;
   linting: boolean;
   previewMode: 'browser' | 'in app' | 'none';
   showSpaces: boolean;
   openFileListPos: 'sidebar' | 'header';
   quickTools: boolean;
-  editorFont: 'fira code' | 'default';
+  editorFont: string;
   vibrateOnTap: boolean;
   fullscreen: boolean;
   smartCompletion: boolean;
-  floatingButtonActivation: 'click' | 'long tap';
   floatingButton: boolean;
   liveAutoCompletion: boolean;
   showPrintMargin: boolean;
-  cursorControllerSize: 'none' | 'small' | 'large';
   scrollbarSize: number;
   confirmOnExit: boolean;
   customTheme: Map<string, string>;
@@ -67,7 +66,11 @@ interface Settings {
   keyboardMode: 'NO_SUGGESTIONS' | 'NO_SUGGESTIONS_AGGRESSIVE' | 'NORMAL';
   showAd: boolean;
   disableCache: boolean;
-  hideTearDropTimeOut: number;
+  diagonalScrolling: boolean;
+  reverseScrolling: boolean;
+  teardropTimeout: number;
+  teardropSize: 20 | 40 | 60;
+  scrollSpeed: number;
 }
 
 interface AppSettings {
@@ -88,6 +91,9 @@ interface AppSettings {
     eventName: 'reset' | 'update',
     callback: (this: Settings, settings: Settings | string) => void,
   ): void;
+  applyAutoSaveSetting(): void;
+  applyAnimationSetting(): void;
+  applyLangSetting(): void;
 }
 
 interface ActionStackOptions {
@@ -127,27 +133,10 @@ interface fileOptions {
   uri: string;
 }
 
-interface Fold{
+interface Fold {
   range: AceAjax.Range;
   ranges: Array<Fold>;
   placeholder: string;
-}
-
-interface NewFileOptions {
-  id?: string;
-  uri?: string;
-  text?: string;
-  render?: boolean;
-  readonly?: boolean;
-  cursorPos?: AceAjax.Position;
-  type: 'regular' | 'git' | 'gist';
-  record: Repo | Gist;
-  onsave(): void;
-  isUnsaved: boolean;
-  mode: 'single' | 'tree';
-  folds: Array<Fold>;
-  editable: boolean;
-  encoding: string;
 }
 
 interface Controls {
@@ -179,58 +168,6 @@ interface Scrollbar extends HTMLElement {
   show(): void;
   /**Hides the scroller. */
   hide(): void;
-}
-
-interface File {
-  assocTile: HTMLElement;
-  /**
-   * Location of the file on the current device or on remote server/device.
-   */
-  uri: string;
-  /**
-   * Name of the file
-   */
-  filename: string;
-  /**
-   * Unique ID of the file.
-   */
-  id: string;
-  /**
-   * If changed is changed this will be marked as true else false.
-   */
-  isUnsaved: boolean;
-  /**
-   * Path of the file.
-   */
-  location: string;
-  /**
-   * Checked if file can be edited.
-   */
-  readOnly: boolean;
-  /**
-   * Type of file.
-   */
-  type: 'regular' | 'git' | 'gist';
-  record: Repo & Gist;
-  updateControls(): void;
-  session: AceAjax.IEditSession;
-  editable: boolean;
-  canWrite: boolean;
-  uuid: string;
-  onsave(this: File): void;
-  mode: 'single' | 'tree';
-  /**
-   * Write file data to cache
-   */
-  writeToCache(): Promise<void>;
-  /**
-   * Checks if file is changed or not
-   */
-  isChanged(): Promise<boolean>;
-  /**
-   * gets and sets new line mode of deocument
-   */
-  eol: 'unix' | 'windows' | 'auto';
 }
 
 interface FileStatus {
@@ -402,29 +339,6 @@ interface EditorScroll {
   readonly $hScrollbar: Scrollbar;
 }
 
-interface Manager {
-  addNewFile(filename: string, options: NewFileOptions): File;
-  getFile(
-    checkFor: string | number | Repo | Gist,
-    type: 'id' | 'name' | 'uri' | 'git' | 'gist',
-  ): File;
-  switchFile(id: string): void;
-  removeFile(id: string | File, force: boolean): void;
-  editor: AceAjax.Editor;
-  activeFile: File;
-  onupdate(operation: string, ...args: any): void;
-  files: Array<File>;
-  controls: Controls;
-  state: 'blur' | 'focus';
-  setSubText(file: File): void;
-  moveOpenFileList(): void;
-  sidebar: HTMLDivElement;
-  container: HTMLDivElement;
-  readonly scroll: EditorScroll;
-  readonly TIMEOUT_VALUE: number;
-  readonly openFileList: HTMLElement;
-}
-
 interface Strings {
   [key: string]: string;
 }
@@ -530,7 +444,7 @@ interface PathData {
   parent: boolean;
 }
 
-interface String extends String {
+interface String {
   /**
    * Capitalize the string for e.g. converts "this is a string" to "This Is A string"
    */
@@ -558,11 +472,6 @@ interface RecentPathData {
   val: RecentPathDataValue;
 }
 
-interface RecentPathDataValue {
-  opts: Object;
-  url: string;
-}
-
 interface KeyBinding {
   description: string;
   key: string;
@@ -570,14 +479,14 @@ interface KeyBinding {
   action: string;
 }
 
-interface PluginAuthor{
+interface PluginAuthor {
   name: string;
   email: string;
   website?: string;
   github: string;
 }
 
-interface PluginJson{
+interface PluginJson {
   id: string;
   name: string;
   main: string;
@@ -599,10 +508,6 @@ declare function decodeURL(url: string): string;
  */
 declare var appSettings: AppSettings;
 /**
- * language of the app
- */
-declare var lang: string;
-/**
  * Predefined strings for language support
  */
 declare var strings: Strings;
@@ -620,23 +525,16 @@ declare var IS_FREE_VERSION: boolean;
 declare var KEYBINDING_FILE: string;
 declare var ANDROID_SDK_INT: number;
 
-declare var $placeholder: HTMLElement;
-declare var pageCount: number;
-declare var saveTimeout: number;
-declare var promotion: Promotion;
-declare var appStarted: boolean;
 declare var ace: AceAjax.Ace;
+declare var app: HTMLBodyElement;
+declare var root: HTMLElement;
+declare var freeze: boolean;
+declare var saveTimeout: number;
 declare var actionStack: ActionStack;
 declare var addedFolder: Array<Folder>;
-declare var app: HTMLBodyElement;
-declare var editorManager: Manager;
-declare var fileClipBoard: FileClipBoard;
-declare var freeze: boolean;
 declare var gitRecord: GitRecord;
 declare var gistRecord: GistRecord;
 declare var gitRecordFile: string;
 declare var gistRecordFile: string;
-declare var root: HTMLElement;
-declare var saveInterval: number;
 declare var toastQueue: Array<HTMLElement>;
 declare var toast: (string) => void;

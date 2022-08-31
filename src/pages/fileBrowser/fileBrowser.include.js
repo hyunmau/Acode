@@ -2,25 +2,26 @@ import './fileBrowser.scss';
 import tag from 'html-tag-js';
 import mustache from 'mustache';
 import Page from '../../components/page';
-import helpers from '../../lib/utils/helpers';
+import helpers from '../../utils/helpers';
 import contextMenu from '../../components/contextMenu';
 import dialogs from '../../components/dialogs';
 import constants from '../../lib/constants';
-import filesSettings from '../settings/filesSettings';
+import filesSettings from '../../settings/filesSettings';
 import _template from './fileBrowser.hbs';
 import _list from './list.hbs';
 import _addMenu from './add-menu.hbs';
 import _addMenuHome from './add-menu-home.hbs';
-import externalFs from '../../lib/fileSystem/externalFs';
-import fsOperation from '../../lib/fileSystem/fsOperation';
+import externalFs from '../../fileSystem/externalFs';
+import fsOperation from '../../fileSystem/fsOperation';
 import searchBar from '../../components/searchbar';
 import projects from './projects';
-import Url from '../../lib/utils/Url';
+import Url from '../../utils/Url';
 import util from './util';
 import openFolder from '../../lib/openFolder';
 import recents from '../../lib/recents';
 import remoteStorage from '../../lib/remoteStorage';
 import URLParse from 'url-parse';
+import checkFiles from '../../lib/checkFiles';
 
 /**
  * @typedef {{url: String, name: String}} Location
@@ -38,12 +39,11 @@ import URLParse from 'url-parse';
 /**
  *
  * @param {import('./fileBrowser').BrowseMode} [mode='file']
- * @param {function(string):boolean} [buttonText] button text or function to check extension
  * @param {string} [info]
  * @param {boolean} [doesOpenLast]
  * @returns {Promise<import('./fileBrowser').SelectedFile>}
  */
-function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
+function FileBrowserInclude(mode, info, doesOpenLast = true) {
   mode = mode || 'file';
 
   const IS_FOLDER_MODE = ['folder', 'both'].includes(mode);
@@ -118,11 +118,7 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
     const $addMenu = contextMenu({
       innerHTML: () => {
         if (currentDir.url === '/') {
-          const addSftpNotice = !localStorage.__fbAddSftp;
-          const addPathNotice = !localStorage.__fbAddPath;
           return mustache.render(_addMenuHome, {
-            addPathNotice,
-            addSftpNotice,
             ...strings,
           });
         } else {
@@ -192,7 +188,12 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
       $fbMenu.hide();
       const action = e.target.getAttribute('action');
       if (action === 'settings') {
-        filesSettings(reload);
+        filesSettings();
+        const onshow = () => {
+          $page.off('show', onshow);
+          reload();
+        }
+        $page.on('show', onshow);
         return;
       }
 
@@ -215,8 +216,6 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
         toast(strings.success);
         return;
       }
-
-      checkAndSetNotification();
     };
 
     $addMenu.onclick = function (e) {
@@ -232,16 +231,11 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
           break;
 
         case 'add-path':
-          localStorage.__fbAddPath = true;
           addStorage();
           break;
 
         case 'addFtp':
         case 'addSftp':
-          if (action === 'addSftp') {
-            localStorage.__fbAddSftp = true;
-          }
-
           remoteStorage[action]()
             .then((storage) => {
               updateStorage(storage);
@@ -254,8 +248,6 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
         default:
           break;
       }
-
-      checkAndSetNotification();
     };
 
     $search.onclick = function () {
@@ -408,21 +400,20 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
         dialogs.select('', options).then((res) => {
           switch (res) {
             case 'delete':
-              dialogs
-                .confirm(
-                  strings.warning.toUpperCase(),
-                  strings['delete {name}'].replace('{name}', name),
-                )
-                .then(remove);
+              dialogs.confirm(
+                strings.warning.toUpperCase(),
+                strings['delete {name}'].replace('{name}', name),
+              ).then((confirmation) => {
+                if (!confirmation) return;
+                remove();
+              });
               break;
             case 'rename':
-              dialogs
-                .prompt(strings.rename, name, 'text', {
-                  match: constants.FILE_NAME_REGEX,
-                })
-                .then((newname) => {
-                  rename(newname);
-                });
+              dialogs.prompt(strings.rename, name, 'text', {
+                match: constants.FILE_NAME_REGEX,
+              }).then((newname) => {
+                rename(newname);
+              });
               break;
 
             case 'edit':
@@ -531,6 +522,7 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
       }
 
       function openDoc() {
+        checkFiles.check = false;
         sdcard.openDocumentFile(
           (res) => {
             res.url = res.uri;
@@ -551,16 +543,6 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
 
     function handleContextMenu(e) {
       handleClick(e, true);
-    }
-
-    function checkAndSetNotification() {
-      const addButtonNotice = !localStorage.__fbAddPath || !localStorage.__fbAddSftp;
-
-      if (addButtonNotice) {
-        $addMenuToggler.classList.add('notice');
-      } else {
-        $addMenuToggler.classList.remove('notice');
-      }
     }
 
     async function listAllStorages() {
@@ -691,7 +673,7 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
           url,
           name,
           scroll: 0,
-          list: helpers.sortDir(list, fileBrowser, testFileType, mode),
+          list: helpers.sortDir(list, fileBrowser, mode),
         };
       }
     }
@@ -965,23 +947,6 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
     }
 
     /**
-     * Check if file is allowed or not and returns `true` if allowed
-     * else returns `false`.
-     * @param {String} uri
-     * @returns
-     */
-    function testFileType(uri) {
-      const ext = helpers.extname(uri);
-
-      if (
-        appSettings.value.filesNotAllowed.includes((ext || '').toLowerCase())
-      ) {
-        return false;
-      }
-      return true;
-    }
-
-    /**
      *
      * @param {Storage} storage
      * @param {Boolean} doesRleoad
@@ -1026,14 +991,6 @@ function FileBrowserInclude(mode, info, buttonText, doesOpenLast = true) {
       $content.append($list);
       $list.scrollTop = scroll;
       $list.focus();
-
-      //Adding notification to icon to let user know about new feature
-      if (dir.url === '/') {
-        checkAndSetNotification();
-      } else {
-        $menuToggler.classList.remove('notice');
-        $addMenuToggler.classList.remove('notice');
-      }
 
       currentDir = dir;
       cachedDir[dir.url] = dir;

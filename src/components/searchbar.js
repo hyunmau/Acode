@@ -1,11 +1,13 @@
 import tag from 'html-tag-js';
-import helpers from '../lib/utils/helpers';
+import helpers from '../utils/helpers';
 
 /**
  *
- * @param {HTMLUListElement|HTMLOListElement} list
+ * @param {HTMLUListElement|HTMLOListElement} $list
+ * @param {(hide:()=>)=>void} setHide
  */
-function searchBar(list) {
+function searchBar($list, setHide) {
+  let hideOnBlur = true;
   const $searchInput = tag('input', {
     type: 'search',
     placeholder: strings.search,
@@ -18,20 +20,32 @@ function searchBar(list) {
         className: 'icon clearclose',
         onclick: (e) => {
           e.preventDefault();
-          e.stopImmediatePropagation();
           e.stopPropagation();
+          e.stopImmediatePropagation();
           hide();
         },
       }),
     ],
   });
-  const children = [...list.children];
+  const children = [...$list.children];
 
+  if (typeof setHide === 'function') {
+    hideOnBlur = false;
+    setHide(() => {
+      $container.remove();
+      actionStack.remove('searchbar');
+      restoreList(); // resotre list items when searchbar is hidden
+    });
+  }
   app.appendChild($container);
   $searchInput.oninput = search;
   $searchInput.focus();
   $searchInput.onblur = () => {
-    hide(false);
+    if (hideOnBlur) {
+      setTimeout(() => {
+        hide();
+      }, 0);
+    }
   };
 
   actionStack.push({
@@ -39,13 +53,13 @@ function searchBar(list) {
     action: hideSearchBar,
   });
 
-  function hide(resetList) {
+  function hide() {
     actionStack.remove('searchbar');
-    hideSearchBar(resetList);
+    hideSearchBar();
   }
 
-  function hideSearchBar(resetList = true) {
-    if (resetList) onhide();
+  function hideSearchBar() {
+    onhide();
     $container.classList.add('hide');
     setTimeout(() => {
       $container.remove();
@@ -64,13 +78,18 @@ function searchBar(list) {
       if (text.match(val, 'i')) result.push(child);
     });
 
-    list.textContent = '';
-    list.append(...result);
+    $list.textContent = '';
+    $list.append(...result);
   }
 
   function onhide() {
-    list.textContent = '';
-    list.append(...children);
+    if (!$list.parentElement) return;
+    restoreList();
+  }
+
+  function restoreList() {
+    $list.textContent = '';
+    $list.append(...children);
   }
 }
 

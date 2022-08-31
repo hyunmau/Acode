@@ -1,6 +1,8 @@
-import fsOperation from './fileSystem/fsOperation';
-import helpers from './utils/helpers';
-import Url from './utils/Url';
+import constants from './constants';
+import fsOperation from '../fileSystem/fsOperation';
+import helpers from '../utils/helpers';
+import Url from '../utils/Url';
+import lang from './lang';
 /**
  * @typedef {object} fileBrowserSettings
  * @property {string} showHiddenFiles
@@ -18,81 +20,85 @@ import Url from './utils/Url';
  * @typedef {object} settingsValue
  * @property {fileBrowserSettings} fileBrowser
  * @property {number} maxFileSize
- * @property {string[]} filesNotAllowed
  * @property {searchAndFindSettings} search
  * @property {string} lang
  */
 
-class Settings {
+export default class Settings {
   /**
    * @type {settingsValue}
    */
   #defaultSettings;
-  #initialized = false;
   #oldSettings;
+  #initialized = false;
   #keyboardModes = ['NO_SUGGESTIONS', 'NO_SUGGESTIONS_AGGRESSIVE', 'NORMAL'];
+  #on = {
+    update: [],
+    reset: [],
+  };
+  #searchSettings = {
+    caseSensitive: false,
+    regExp: false,
+    wholeWord: false,
+    backwards: true,
+  };
+  #fileBrowserSettings = {
+    showHiddenFiles: false,
+    sortByName: true,
+  };
+
+  customTheme = {
+    '--accent-color': 'rgb(51,153,255)',
+    '--active-icon-color': 'rgba(0, 0, 0, 0.2)',
+    '--border-color': 'rgba(122, 122, 122, 0.227)',
+    '--box-shadow-color': 'rgba(0, 0, 0, 0.2)',
+    '--button-active-color': 'rgb(44,142,240)',
+    '--button-background-color': 'rgb(51,153,255)',
+    '--button-text-color': 'rgb(255,255,255)',
+    '--error-text-color': 'rgb(255,185,92)',
+    '--link-text-color': 'rgb(97,94,253)',
+    '--popup-active-color': 'rgb(169,0,0)',
+    '--popup-background-color': 'rgb(255,255,255)',
+    '--popup-border-color': 'rgba(0, 0, 0, 0)',
+    '--popup-icon-color': 'rgb(153,153,255)',
+    '--popup-text-color': 'rgb(37,37,37)',
+    '--primary-color': 'rgb(153,153,255)',
+    '--primary-text-color': 'rgb(255,255,255)',
+    '--scrollbar-color': 'rgba(0, 0, 0, 0.33)',
+    '--secondary-color': 'rgb(255,255,255)',
+    '--secondary-text-color': 'rgb(37,37,37)',
+  };
 
   constructor() {
-    this.methods = {
-      update: [],
-      reset: [],
-    };
-
     this.#defaultSettings = {
-      animation: true,
-      appTheme: /free/.test(BuildInfo.packageName) ? 'dark' : 'ocean',
+      animation: 'system',
+      appTheme: IS_FREE_VERSION ? 'dark' : 'ocean',
       autosave: 0,
-      fileBrowser: {
-        showHiddenFiles: false,
-        sortByName: true,
-      },
+      fileBrowser: this.#fileBrowserSettings,
+      formatter: {},
       maxFileSize: 12,
-      filesNotAllowed: [
-        'zip',
-        'apk',
-        'doc',
-        'docx',
-        'mp3',
-        'mp4',
-        'avi',
-        'flac',
-        'mov',
-        'rar',
-        'pdf',
-        'gif',
-        'flv',
-      ],
-      search: {
-        caseSensitive: false,
-        regExp: false,
-        wholeWord: false,
-        backwards: true,
-      },
+      previewPort: constants.PREVIEW_PORT,
+      search: this.#searchSettings,
       lang: 'en-us',
       fontSize: '12px',
-      editorTheme: /free/.test(BuildInfo.packageName)
-        ? 'ace/theme/nord_dark'
-        : 'ace/theme/dracula',
+      editorTheme: IS_FREE_VERSION ? 'ace/theme/nord_dark' : 'ace/theme/dracula',
       textWrap: true,
       softTab: true,
       tabSize: 2,
       linenumbers: true,
-      beautify: ['*'],
-      linting: false,
+      formatOnSave: false,
       autoCorrect: true,
       previewMode: 'inapp',
       openFileListPos: 'header',
       quickTools: true,
-      editorFont: 'default',
+      editorFont: 'Roboto Mono',
       vibrateOnTap: true,
       fullscreen: false,
-      floatingButtonActivation: 'click',
       floatingButton: true,
       liveAutoCompletion: true,
       showPrintMargin: false,
       scrollbarSize: 20,
       showSpaces: false,
-      // showAd: true,
       cursorControllerSize: 'small',
       confirmOnExit: true,
       customThemeMode: 'dark',
@@ -102,42 +108,21 @@ class Settings {
       desktopMode: false,
       console: 'legacy',
       keyboardMode: 'NO_SUGGESTIONS',
-      hideTearDropTimeOut: 3000,
       disableCache: false,
       rememberFiles: true,
       rememberFolders: true,
-      customTheme: {
-        '--primary-color': 'rgb(153,153,255)',
-        '--secondary-color': 'rgb(255,255,255)',
-        '--accent-color': 'rgb(51,153,255)',
-        '--text-color': 'rgb(37,37,37)',
-        '--text-main-color': 'rgb(255,255,255)',
-        '--a-color': 'rgb(97,94,253)',
-        '--border-color': 'rgba(122, 122, 122, 0.227)',
-        '--error-text-color': 'rgb(255,185,92)',
-        '--active-icon-color': 'rgba(0, 0, 0, 0.2)',
-        '--popup-border-color': 'rgba(0, 0, 0, 0)',
-        '--box-shadow-color': 'rgba(0, 0, 0, 0.2)',
-        '--button-background-color': 'rgb(51,153,255)',
-        '--button-active-color': 'rgb(44,142,240)',
-        '--button-text-color': 'rgb(255,255,255)',
-        '--scrollbar-color': 'rgba(0, 0, 0, 0.33)',
-        '--menu-background-color': 'rgb(255,255,255)',
-        '--menu-text-color': 'rgb(37,37,37)',
-        '--menu-icon-color': 'rgb(153,153,255)',
-        '--dialogbox-background-color': 'rgb(255,255,255)',
-        '--dialogbox-text-color': 'rgb(37,37,37)',
-        '--dialogbox-selected-option-color': 'rgb(169,0,0)',
-        '--command-palette-background-color': 'rgb(153,153,255)',
-        '--command-palette-text-color': 'rgb(255,255,255)',
-        '--command-palette-border': 'none',
-      },
+      diagonalScrolling: false,
+      reverseScrolling: false,
+      teardropTimeout: 3000,
+      teardropSize: 30,
+      scrollSpeed: constants.SCROLL_SPEED_NORMAL,
+      customTheme: this.customTheme,
     };
 
     this.settingsFile = Url.join(DATA_STORAGE, 'settings.json');
   }
 
-  async init(lang) {
+  async init() {
     if (this.#initialized) return;
     this.#initialized = true;
 
@@ -147,15 +132,16 @@ class Settings {
       await this.#save();
       this.value = { ...this.#defaultSettings };
       this.#oldSettings = { ...this.#defaultSettings };
-      this.value.lang = lang;
+      this.value.lang = navigator.language || 'en-us';
       return;
     }
 
     const settings = helpers.parseJSON(await fs.readFile('utf-8'));
     if (settings) {
-      if (!Array.isArray(settings.beautify)) savedSettings.beautify = ['*'];
-      for (let setting in this.#defaultSettings) {
-        if (!(setting in settings)) {
+      // make sure that all the settings are present
+      Object.keys(this.#defaultSettings).forEach((setting) => {
+        const value = settings[setting];
+        if (value === undefined) {
           settings[setting] = this.#defaultSettings[setting];
         }
 
@@ -164,7 +150,8 @@ class Settings {
             settings[setting] = this.#defaultSettings[setting];
           }
         }
-      }
+      });
+
       this.value = { ...settings };
       this.#oldSettings = { ...settings };
       return;
@@ -198,24 +185,37 @@ class Settings {
       settings = null;
     }
 
-    const onupdate = [...this.methods.update];
+    const onupdate = [...this.#on.update];
 
-    for (let key in settings) {
-      if (key in this.value) this.value[key] = settings[key];
+    if (settings) {
+      Object.keys(settings).forEach((key) => {
+        if (key in this.value) this.value[key] = settings[key];
+        switch (key) {
+          case 'animation':
+            this.applyAnimationSetting();
+            break;
+
+          case 'lang':
+            this.applyLangSetting();
+            break;
+
+          default:
+            break;
+        }
+      });
     }
 
     const changedSettings = this.#getChangedKeys();
-    for (let key of changedSettings) {
-      if (Array.isArray(this.methods[`update:${key}`])) {
-        for (let cb of this.methods[`update:${key}`]) {
-          onupdate.push(cb.bind(this.value, this.value[key]));
-        }
+    changedSettings.forEach((setting) => {
+      const listeners = this.#on[`update:${setting}`];
+      if (Array.isArray(listeners)) {
+        onupdate.push(...listeners);
       }
-    }
+      onupdate.forEach((listener) => listener(this.value[setting]));
+    });
 
     if (saveFile) await this.#save();
     if (showToast) toast(strings['settings saved']);
-    for (let callback of onupdate) callback(this.value);
   }
 
   async reset(setting) {
@@ -231,7 +231,7 @@ class Settings {
       await this.update(false);
     }
 
-    for (let onreset of this.methods.reset) onreset(this.value);
+    this.#on.reset.forEach((onreset) => onreset(this.value))
   }
 
   /**
@@ -240,8 +240,8 @@ class Settings {
    * @param {function():void} callback
    */
   on(event, callback) {
-    if (!this.methods[event]) this.methods[event] = [];
-    this.methods[event].push(callback);
+    if (!this.#on[event]) this.#on[event] = [];
+    this.#on[event].push(callback);
   }
 
   /**
@@ -250,8 +250,8 @@ class Settings {
    * @param {function():void} callback
    */
   off(event, callback) {
-    if (!this.methods[event]) this.methods[event] = [];
-    this.methods[event].splice(this.methods[event].indexOf(callback), 1);
+    if (!this.#on[event]) this.#on[event] = [];
+    this.#on[event].splice(this.#on[event].indexOf(callback), 1);
   }
 
   /**
@@ -264,31 +264,43 @@ class Settings {
   }
 
   /**
-   *
-   * @param {String} ext
-   * @returns
-   */
-  isFileAllowed(ext = '') {
-    return this.value.filesNotAllowed.includes(ext.toLowerCase());
-  }
-
-  /**
    * Returns changed settings
    * @returns {Array<String>}
    */
   #getChangedKeys() {
+    if (!this.#oldSettings) return [];
     const keys = [];
-    for (let key in this.#oldSettings) {
+    Object.keys(this.#oldSettings).forEach((key) => {
       const value = this.#oldSettings[key];
       if (typeof value === 'object') {
         if (!helpers.areEqual(value, this.value[key])) keys.push(key);
-        continue;
+        return;
       }
 
       if (value !== this.value[key]) keys.push(key);
-    }
+    });
     return keys;
   }
-}
 
-export default Settings;
+  async applyAnimationSetting() {
+    let value = this.value.animation;
+    if (value === 'system') {
+      const res = await new Promise((resolve, reject) => {
+        system.getGlobalSetting("animator_duration_scale", resolve, reject);
+      });
+      if (res) value = 'yes';
+      else value = 'no';
+    }
+
+    if (value === 'yes') {
+      app.classList.remove('no-animation');
+    } else if (value === 'no') {
+      app.classList.add('no-animation');
+    }
+  }
+
+  async applyLangSetting() {
+    const value = this.value.lang;
+    lang.set(value);
+  }
+}

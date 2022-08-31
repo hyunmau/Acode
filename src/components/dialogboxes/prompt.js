@@ -5,11 +5,12 @@ import autosize from 'autosize';
  *
  * @param {string} message
  * @param {string} defaultValue
- * @param {"textarea"|"text"|"numberic"|"tel"|"search"|"email"|"url"} type
+ * @param {"textarea"|"text"|"number"|"tel"|"search"|"email"|"url"} type
  * @param {object} options
  * @param {RegExp} options.match
  * @param {boolean} options.required
  * @param {string} options.placeholder
+ * @param {(any)=>boolean} options.test
  */
 function prompt(message, defaultValue, type = 'text', options = {}) {
   return new Promise((resolve) => {
@@ -23,7 +24,7 @@ function prompt(message, defaultValue, type = 'text', options = {}) {
     const input = tag(inputType, {
       value: defaultValue,
       className: 'input',
-      placeholder: options.placeholder || '',
+      placeholder: options.placeholder,
     });
     const okBtn = tag('button', {
       type: 'submit',
@@ -35,7 +36,9 @@ function prompt(message, defaultValue, type = 'text', options = {}) {
           return;
         }
         hide();
-        resolve(input.value);
+        let { value } = input;
+        if (type === 'number') value = +value;
+        resolve(value);
       },
     });
     const cancelBtn = tag('button', {
@@ -76,10 +79,24 @@ function prompt(message, defaultValue, type = 'text', options = {}) {
       input.inputMode = type;
     } else {
       input.type = type;
+      if (type === 'number') {
+        input.step = 'any';
+      }
     }
 
     input.oninput = function () {
-      if (options.match && !options.match.test(this.value)) {
+      const { match, test } = options;
+      let isValid = true;
+
+      if (match) {
+        isValid = match.test(input.value);
+      }
+
+      if (test) {
+        isValid = test(input.value);
+      }
+
+      if (!isValid) {
         okBtn.disabled = true;
         errorMessage.textContent = strings['invalid value'];
       } else {
@@ -101,6 +118,14 @@ function prompt(message, defaultValue, type = 'text', options = {}) {
     window.restoreTheme(true);
     app.append(promptDiv, mask);
     input.focus();
+    if (input.value) {
+      try {
+        const col = input.value.length;
+        input.setSelectionRange(col, col);
+      } catch (error) {
+        // ignore
+      }
+    }
     if (inputType === 'textarea') autosize(input);
 
     function hidePrompt() {

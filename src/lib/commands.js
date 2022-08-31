@@ -1,45 +1,40 @@
 import saveFile from './saveFile';
-import select from './handlers/selectword';
 import run from './run';
-import settingsMain from '../pages/settings/mainSettings';
+import settingsMain from '../settings/mainSettings';
 import dialogs from '../components/dialogs';
 import openFile from './openFile';
 import openFolder from './openFolder';
-import helpers from '../lib/utils/helpers';
+import helpers from '../utils/helpers';
 import constants from './constants';
 import GithubLogin from '../pages/login/login';
 import gitHub from '../pages/github/gitHub';
-import help from '../pages/help';
+import help from '../settings/help';
 import recents from '../lib/recents';
-import fsOperation from '../lib/fileSystem/fsOperation';
+import fsOperation from '../fileSystem/fsOperation';
 import Modes from '../pages/modes/modes';
-import clipboardAction from '../lib/clipboard';
-import quickTools from './handlers/quickTools';
+import quickTools from '../handlers/quickTools';
 import FileBrowser from '../pages/fileBrowser/fileBrowser';
-import path from './utils/Path';
+import path from '../utils/Path';
 import showFileInfo from './showFileInfo';
 import checkFiles from './checkFiles';
 import saveState from './saveState';
-import { commandPallete } from '../components/commandPallete';
+import commandPallete from '../components/commandPallete';
 import tag from 'html-tag-js';
+import TextEncodings from '../pages/textEncodings/textEncodings';
+import EditorFile from './editorFile';
+import findFile from '../components/findFile';
 
 export default {
   'close-all-tabs'() {
-    for (let file of editorManager.files) {
-      editorManager.removeFile(file);
-    }
+    editorManager.files.forEach((file) => {
+      file.remove();
+    });
   },
   'close-current-tab'() {
-    editorManager.removeFile(editorManager.activeFile);
+    editorManager.activeFile.remove();
   },
-  console() {
+  'console'() {
     run(true, 'in app');
-  },
-  copy() {
-    clipboardAction('copy');
-  },
-  cut() {
-    clipboardAction('cut');
   },
   'check-files'() {
     if (!appSettings.value.checkFiles) return;
@@ -55,57 +50,38 @@ export default {
   'enable-fullscreen'() {
     app.classList.add('fullscreen-mode');
     this['resize-editor']();
-    editorManager.controls.vScrollbar.resize();
+    editorManager.scroll.$vScrollbar.resize();
   },
-  encoding() {
-    dialogs
-      .select(strings.encoding, constants.encodings, {
-        default: editorManager.activeFile.encoding,
-      })
-      .then((encoding) => {
-        const file = editorManager.activeFile;
-        file.encoding = encoding;
-        const text = file.session.getValue();
-        const decodedText = new TextEncoder().encode(text);
-        const newText = new TextDecoder(encoding).decode(decodedText);
-        file.session.setValue(newText);
-        file.isUnsaved = false;
-        editorManager.onupdate('encoding');
-        editorManager.emit('update', 'encoding');
-      });
+  async 'encoding'() {
+    const encoding = await TextEncodings();
+    const file = editorManager.activeFile;
+    file.encoding = encoding;
+    const text = file.session.getValue();
+    const decodedText = new TextEncoder().encode(text);
+    const newText = new TextDecoder(encoding).decode(decodedText);
+    file.session.setValue(newText);
+    file.isUnsaved = false;
+    editorManager.onupdate('encoding');
+    editorManager.emit('update', 'encoding');
   },
-  async eol() {
-    const eol = await dialogs.select(
-      strings['new line mode'],
-      ['unix', 'windows'],
-      {
-        default: editorManager.activeFile.eol,
-      },
-    );
-    editorManager.activeFile.eol = eol;
-  },
-  exit() {
+  'exit'() {
     navigator.app.exitApp();
   },
-  files() {
+  'find-file'() {
+    findFile();
+  },
+  'files'() {
     FileBrowser('both', strings['file browser'])
       .then(FileBrowser.open)
       .catch(FileBrowser.openError);
   },
-  find() {
+  'find'() {
     quickTools.actions('search');
-  },
-  async format() {
-    const { editor } = editorManager;
-    const pos = editor.getCursorPosition();
-
-    await acode.format();
-    editor.selection.moveCursorToPosition(pos);
   },
   'file-info'(url) {
     showFileInfo(url);
   },
-  github() {
+  'github'() {
     if (
       (!localStorage.username || !localStorage.password) &&
       !localStorage.token
@@ -113,7 +89,7 @@ export default {
       return GithubLogin();
     gitHub();
   },
-  goto() {
+  'goto'() {
     dialogs
       .prompt(strings['enter line number'], '', 'number', {
         placeholder: 'line.column',
@@ -121,15 +97,12 @@ export default {
       .then((lineNumber) => {
         const editor = editorManager.editor;
         editor.focus();
-        const [line, col] = lineNumber.split('.');
+        const [line, col] = `${lineNumber}`.split('.');
         editor.gotoLine(line, col, true);
       })
       .catch((err) => {
         console.error(err);
       });
-  },
-  'insert-color'() {
-    clipboardAction('color');
   },
   'new-file'() {
     dialogs
@@ -145,9 +118,9 @@ export default {
       .then((filename) => {
         if (filename) {
           filename = helpers.removeLineBreaks(filename);
-          editorManager.addNewFile(filename, {
+          new EditorFile(filename, {
             isUnsaved: false,
-          });
+          })
         }
       })
       .catch((err) => {
@@ -161,9 +134,9 @@ export default {
     if (fileIndex === len - 1) fileIndex = 0;
     else ++fileIndex;
 
-    editorManager.switchFile(editorManager.files[fileIndex].id);
+    editorManager.files[fileIndex].makeActive();
   },
-  open(page) {
+  'open'(page) {
     if (page === 'settings') settingsMain();
     if (page === 'help') help();
     editorManager.editor.blur();
@@ -180,9 +153,6 @@ export default {
       .then(FileBrowser.openFolder)
       .catch(FileBrowser.openFolderError);
   },
-  paste() {
-    clipboardAction('paste');
-  },
   'prev-file'() {
     const len = editorManager.files.length;
     let fileIndex = editorManager.files.indexOf(editorManager.activeFile);
@@ -190,13 +160,13 @@ export default {
     if (fileIndex === 0) fileIndex = len - 1;
     else --fileIndex;
 
-    editorManager.switchFile(editorManager.files[fileIndex].id);
+    editorManager.files[fileIndex].makeActive();
   },
   'read-only'() {
     const file = editorManager.activeFile;
     file.editable = !file.editable;
   },
-  recent() {
+  'recent'() {
     recents.select().then((res) => {
       const { type } = res;
       if (helpers.isFile(type)) {
@@ -212,7 +182,87 @@ export default {
       }
     });
   },
-  async rename(file) {
+  'replace'() {
+    this.find();
+  },
+  'resize-editor'() {
+    editorManager.editor.resize(true);
+  },
+  'run'() {
+    tag.get('[action=run]')?.click();
+  },
+  'run-file'() {
+    tag.get('[action=run]')?.contextmenu();
+  },
+  'save'(toast) {
+    saveFile(editorManager.activeFile, false, toast);
+  },
+  'save-state'() {
+    saveState();
+  },
+  'save-as'(toast) {
+    saveFile(editorManager.activeFile, true, toast);
+  },
+  async 'syntax'() {
+    editorManager.editor.blur();
+    const mode = await Modes();
+    const activefile = editorManager.activeFile;
+
+    let modeAssociated;
+    try {
+      modeAssociated = JSON.parse(localStorage.modeassoc || '{}');
+    } catch (error) {
+      modeAssociated = {};
+    }
+
+    modeAssociated[path.extname(activefile.filename)] = mode;
+    localStorage.modeassoc = JSON.stringify(modeAssociated);
+
+    activefile.setMode(mode);
+  },
+  'toggle-quick-tools'() {
+    quickTools.actions('toggle-quick-tools');
+    editorManager.scroll.$vScrollbar.resize();
+  },
+  'toggle-fullscreen'() {
+    app.classList.toggle('fullscreen-mode');
+    this['resize-editor']();
+  },
+  'toggle-sidebar'() {
+    editorManager.sidebar.toggle();
+  },
+  'toggle-menu'() {
+    tag.get('[action=toggle-menu]')?.click();
+  },
+  'toggle-editmenu'() {
+    tag.get('[action=toggle-edit-menu')?.click();
+  },
+  'insert-color'() {
+    const { editor } = editorManager;
+    const color = editor.session.getTextRange(editor.getSelectionRange());
+
+    editor.blur();
+    dialogs.color(color)
+      .then((res) => {
+        editor.insert(res);
+        editor.focus();
+      });
+  },
+  'copy'() {
+    editorManager.editor.execCommand('copy');
+  },
+  'cut'() {
+    editorManager.editor.execCommand('cut');
+  },
+  'paste'() {
+    editorManager.editor.execCommand('paste');
+  },
+  'select-all'() {
+    const { editor } = editorManager;
+    editor.execCommand('selectall');
+    editor.scrollToRow(Infinity);
+  },
+  async 'rename'(file) {
     file = file || editorManager.activeFile;
 
     if (file.mode === 'single') {
@@ -248,67 +298,21 @@ export default {
       file.filename = newname;
     }
   },
-  replace() {
-    this.find();
-  },
-  'resize-editor'() {
-    editorManager.editor.resize(true);
-    editorManager.controls.update();
-  },
-  run() {
-    tag.get('[action=run]')?.click();
-  },
-  'run-file'() {
-    tag.get('[action=run]')?.contextmenu();
-  },
-  save(toast) {
-    saveFile(editorManager.activeFile, false, toast);
-  },
-  'save-state'() {
-    saveState();
-  },
-  'save-as'(toast) {
-    saveFile(editorManager.activeFile, true, toast);
-  },
-  'select-all'() {
-    clipboardAction('select all');
-  },
-  'select-word': select,
-  'select-line': select.bind({}, 'line'),
-  syntax() {
-    editorManager.editor.blur();
-    Modes().then((mode) => {
-      const activefile = editorManager.activeFile;
-      const ext = path.extname(activefile.filename);
+  async 'format'(selectIfNull) {
+    const { editor } = editorManager;
+    const pos = editor.getCursorPosition();
 
-      let modeAssociated;
-      try {
-        modeAssociated = JSON.parse(localStorage.modeassoc || '{}');
-      } catch (error) {
-        modeAssociated = {};
-      }
-
-      modeAssociated[ext] = mode;
-      localStorage.modeassoc = JSON.stringify(modeAssociated);
-
-      activefile.setMode(mode);
-    });
+    await acode.format(selectIfNull);
+    editor.selection.moveCursorToPosition(pos);
   },
-  'toggle-quick-tools'() {
-    quickTools.actions('toggle-quick-tools');
-    editorManager.controls.vScrollbar.resize();
-  },
-  'toggle-fullscreen'() {
-    app.classList.toggle('fullscreen-mode');
-    this['resize-editor']();
-  },
-  'toggle-sidebar'() {
-    editorManager.sidebar.toggle();
-  },
-  'toggle-menu'() {
-    tag.get('[action=toggle-menu]')?.click();
-  },
-  'toggle-editmenu'() {
-    tag.get('[action=toggle-edit-menu')?.click();
+  async 'eol'() {
+    const eol = await dialogs.select(
+      strings['new line mode'],
+      ['unix', 'windows'],
+      {
+        default: editorManager.activeFile.eol,
+      },
+    );
+    editorManager.activeFile.eol = eol;
   },
 };
