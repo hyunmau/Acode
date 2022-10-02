@@ -287,10 +287,6 @@ a.icon {
     color: #e34f26;
   }
 
-  &:focus {
-    border: rgba(0, 0, 0, 0.1);
-  }
-
   &.disabled {
     opacity: 0.6;
     pointer-events: none;
@@ -300,9 +296,14 @@ a.icon {
     opacity: 0.6;
   }
 
+  &:focus {
+    border: rgba(0, 0, 0, 0.1);
+  }
+
   &:not(.floating):active {
     transition: all 100ms ease;
     background-color: rgba(0, 0, 0, 0.2) !important;
+    background-color: var(--active-icon-color) !important;
   }
 
   &.active {
@@ -504,6 +505,7 @@ textarea {
   box-sizing: border-box;
   transform-origin: left top;
   z-index: 4;
+  pointer-events: none;
 
   &[data-size='60'] {
     width: 60px;
@@ -544,6 +546,7 @@ textarea {
   border: var(--clipboard-menu-border);
   color: #252525;
   color: var(--secondary-text-color);
+  transform-origin: left center;
   z-index: 4;
 
   >span {
@@ -766,6 +769,30 @@ button {
 
 .w-resize {
   cursor: w-resize;
+}
+
+.note {
+  margin: 20px 0;
+
+  .note-title {
+    background-color: rgba(0, 0, 0, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    text-transform: uppercase;
+
+    .icon {
+      margin: 0 10px;
+    }
+  }
+
+  p {
+    padding: 10px;
+    box-sizing: border-box;
+    opacity: 0.8;
+    font-size: 0.9rem;
+  }
 }
 
 input[type="search"]::-webkit-search-decoration,

@@ -50,7 +50,6 @@ export default {
   'enable-fullscreen'() {
     app.classList.add('fullscreen-mode');
     this['resize-editor']();
-    editorManager.scroll.$vScrollbar.resize();
   },
   async 'encoding'() {
     const encoding = await TextEncodings();
@@ -66,6 +65,9 @@ export default {
   },
   'exit'() {
     navigator.app.exitApp();
+  },
+  'edit-with'() {
+    editorManager.activeFile.editWith();
   },
   'find-file'() {
     findFile();
@@ -141,6 +143,9 @@ export default {
     if (page === 'help') help();
     editorManager.editor.blur();
   },
+  'open-with'() {
+    editorManager.activeFile.openWith();
+  },
   'open-file'() {
     editorManager.editor.blur();
     FileBrowser('file')
@@ -203,6 +208,9 @@ export default {
   'save-as'(toast) {
     saveFile(editorManager.activeFile, true, toast);
   },
+  'share'() {
+    editorManager.activeFile.share();
+  },
   async 'syntax'() {
     editorManager.editor.blur();
     const mode = await Modes();
@@ -222,7 +230,6 @@ export default {
   },
   'toggle-quick-tools'() {
     quickTools.actions('toggle-quick-tools');
-    editorManager.scroll.$vScrollbar.resize();
   },
   'toggle-fullscreen'() {
     app.classList.toggle('fullscreen-mode');

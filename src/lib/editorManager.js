@@ -20,7 +20,6 @@ async function EditorManager($sidebar, $header, $body) {
    * @type {Collaspable & HTMLElement}
    */
   let $openFileList;
-  let checkTimeout = null;
   let TIMEOUT_VALUE = 500;
   let heightOffset = Math.round(screen.height - innerHeight);
   let preventScrollbarV = false;
@@ -28,7 +27,6 @@ async function EditorManager($sidebar, $header, $body) {
   let scrollBarVisiblityCount = 0;
   let timeoutQuicktoolToggler;
   let timeoutHeaderToggler;
-  let autosaveTimeout;
   const { scrollbarSize, editorFont } = appSettings.value;
   const events = {
     'switch-file': [],
@@ -70,10 +68,6 @@ async function EditorManager($sidebar, $header, $body) {
     header: $header,
     sidebar: $sidebar,
     container: $container,
-    scroll: {
-      $vScrollbar,
-      $hScrollbar,
-    },
     get TIMEOUT_VALUE() {
       return TIMEOUT_VALUE;
     },
@@ -102,48 +96,18 @@ async function EditorManager($sidebar, $header, $body) {
   $hScrollbar.onhide = $vScrollbar.onhide = updateFloatingButton.bind({}, true);
 
   window.addEventListener('resize', () => {
+    const { activeFile } = manager;
     const screenHeight = screen.height - heightOffset;
     const ratio = Math.round((screenHeight / innerHeight) * 10) / 10;
-    if (ratio === 1) {
+    if (ratio === 1 && activeFile.focusedBefore) {
       editor.blur();
-      manager.activeFile.focused = false;
+      activeFile.focused = false;
+      activeFile.focusedBefore = false;
+    } else {
+      activeFile.focusedBefore = activeFile.focused;
     }
     editor.renderer.scrollCursorIntoView();
   });
-
-  editor.on('focus', () => {
-    manager.activeFile.focused = true;
-    $hScrollbar.hide();
-    $vScrollbar.hide();
-  });
-
-  editor.on('change', function (e) {
-    if (checkTimeout) clearTimeout(checkTimeout);
-    if (autosaveTimeout) clearTimeout(autosaveTimeout);
-
-    checkTimeout = setTimeout(async () => {
-      const { activeFile } = manager;
-      if (activeFile.markChanged) {
-        const changed = await activeFile.isChanged();
-        activeFile.isUnsaved = changed;
-        activeFile.writeToCache();
-        events.emit('file-content-changed', activeFile);
-        manager.onupdate('file-changed');
-        manager.emit('update', 'file-changed');
-
-        const { autosave } = appSettings.value;
-        if (activeFile.uri && changed && autosave) {
-          autosaveTimeout = setTimeout(() => {
-            acode.exec('save', false);
-          }, autosave);
-        }
-      }
-      activeFile.markChanged = true;
-    }, TIMEOUT_VALUE);
-  });
-
-  editor.on('scrolltop', onscrolltop);
-  editor.on('scrollleft', onscrollleft);
 
   appSettings.on('update:textWrap', function (value) {
     if (!value) {
@@ -214,9 +178,51 @@ async function EditorManager($sidebar, $header, $body) {
   return manager;
 
   async function setupEditor() {
+    let checkTimeout = null;
+    let autosaveTimeout;
     const Emmet = ace.require('ace/ext/emmet');
     const settings = appSettings.value;
     const commands = await Commands();
+
+    editor.on('focus', () => {
+      const { activeFile } = manager;
+      activeFile.focused = true;
+      $hScrollbar.hide();
+      $vScrollbar.hide();
+    });
+
+    editor.on('change', function (e) {
+      if (checkTimeout) clearTimeout(checkTimeout);
+      if (autosaveTimeout) clearTimeout(autosaveTimeout);
+
+      checkTimeout = setTimeout(async () => {
+        const { activeFile } = manager;
+        if (activeFile.markChanged) {
+          const changed = await activeFile.isChanged();
+          activeFile.isUnsaved = changed;
+          activeFile.writeToCache();
+          events.emit('file-content-changed', activeFile);
+          manager.onupdate('file-changed');
+          manager.emit('update', 'file-changed');
+
+          const { autosave } = appSettings.value;
+          if (activeFile.uri && changed && autosave) {
+            autosaveTimeout = setTimeout(() => {
+              acode.exec('save', false);
+            }, autosave);
+          }
+        }
+        activeFile.markChanged = true;
+      }, TIMEOUT_VALUE);
+    });
+
+    editor.on('scrolltop', onscrolltop);
+    editor.on('scrollleft', onscrollleft);
+
+    editor.renderer.on('resize', () => {
+      $vScrollbar.resize($vScrollbar.visible);
+      $hScrollbar.resize($hScrollbar.visible);
+    });
 
     touchListeners(editor);
     Emmet.setCore(window.emmet);
@@ -383,13 +389,11 @@ async function EditorManager($sidebar, $header, $body) {
   }
 
   function switchFile(id) {
-    const file = editorManager.getFile(id);
+    const file = manager.getFile(id);
 
     manager.activeFile?.tab.classList.remove('active');
     manager.activeFile = file;
     editor.setSession(file.session);
-
-    if (manager.state === 'focus') editor.focus();
     $header.text = file.filename;
     setSubText(file);
 
@@ -418,8 +422,6 @@ async function EditorManager($sidebar, $header, $body) {
     if (appSettings.value.openFileListPos === 'header') {
       $openFileList = tag('ul', {
         className: 'open-file-list',
-        ontouchstart: checkForDrag,
-        onmousedown: checkForDrag,
       });
       if ($list) $openFileList.append(...$list);
       root.appendOuter($openFileList);
@@ -432,136 +434,6 @@ async function EditorManager($sidebar, $header, $body) {
       if ($list) $openFileList.$ul.append(...$list);
       $sidebar.insertBefore($openFileList, $sidebar.firstElementChild);
       root.classList.remove('top-bar');
-    }
-  }
-
-  /**
-   * @this {HTMLElement}
-   * @param {MouseEvent|TouchEvent} e
-   */
-  function checkForDrag(e) {
-    /**@type {HTMLElement} */
-    const $el = e.target;
-    if (!$el.classList.contains('tile')) return;
-
-    const $parent = this;
-    const type = e.type === 'mousedown' ? 'mousemove' : 'touchmove';
-    const opts = {
-      passive: false,
-    };
-    let timeout;
-
-    if ($el.eventAdded) return;
-    $el.eventAdded = true;
-
-    timeout = setTimeout(() => {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      const event = (e) => (e.touches && e.touches[0]) || e;
-
-      let startX = event(e).clientX;
-      let startY = event(e).clientY;
-      let prevEnd = startX;
-      let position;
-      let left = $el.offsetLeft;
-      let $placeholder = tag('div');
-
-      const rect = $el.getBoundingClientRect();
-      $el.style.zIndex = 999;
-      $placeholder.style.height = `${rect.height}px`;
-      $placeholder.style.width = `${rect.width}px`;
-
-      if (appSettings.value.vibrateOnTap) {
-        navigator.vibrate(constants.VIBRATION_TIME);
-        $el.classList.add('select');
-        $el.style.transform = `translate3d(${left}px, 0, 0)`;
-        $parent.insertBefore($placeholder, $el);
-      }
-      document.addEventListener(type, drag, opts);
-      document.ontouchmove = null;
-      document.onmousemove = null;
-      document.ontouchend = cancelDrag;
-      document.onmouseup = cancelDrag;
-      document.ontouchcancel = cancelDrag;
-      document.onmouseleave = cancelDrag;
-
-      function cancelDrag() {
-        $el.classList.remove('select');
-        $el.style.zIndex = 0;
-        $el.style.transform = `translate3d(0, 0, 0)`;
-        document.removeEventListener(type, drag, opts);
-        document.ontouchend = document.onmouseup = null;
-        if ($placeholder.isConnected) {
-          $parent.replaceChild($el, $placeholder);
-          updateFileList();
-        }
-        $el.eventAdded = false;
-        document.ontouchend = null;
-        document.onmouseup = null;
-        document.ontouchcancel = null;
-        document.onmouseleave = null;
-      }
-
-      function drag(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-
-        const end = event(e).clientX;
-
-        position = prevEnd - end > 0 ? 'l' : 'r';
-        prevEnd = end;
-        const move = end - startX;
-        const $newEl = document.elementFromPoint(end, startY);
-
-        $el.style.transform = `translate3d(${left + move}px, 0, 0)`;
-
-        if (
-          $newEl.classList.contains('tile') &&
-          $el !== $newEl &&
-          $parent.contains($newEl)
-        ) {
-          if (position === 'r') {
-            if ($newEl.nextElementSibling) {
-              $parent.insertBefore($placeholder, $newEl.nextElementSibling);
-            } else {
-              $parent.append($placeholder);
-            }
-          } else {
-            $parent.insertBefore($placeholder, $newEl);
-          }
-        }
-      }
-    }, 300);
-
-    document.ontouchend =
-      document.onmouseup =
-      document.ontouchmove =
-      document.onmousemove =
-      function (e) {
-        document.ontouchend =
-          document.onmouseup =
-          document.ontouchmove =
-          document.onmousemove =
-          null;
-        if (timeout) clearTimeout(timeout);
-        $el.eventAdded = false;
-      };
-
-    function updateFileList() {
-      const children = [...$parent.children];
-      const newFileList = [];
-      for (let el of children) {
-        for (let file of manager.files) {
-          if (file.tab === el) {
-            newFileList.push(file);
-            break;
-          }
-        }
-      }
-
-      manager.files = newFileList;
     }
   }
 

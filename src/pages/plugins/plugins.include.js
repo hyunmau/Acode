@@ -11,6 +11,7 @@ import Url from "../../utils/Url";
 import plugin from "../plugin/plugin";
 import dialogs from "../../components/dialogs";
 import constants from "../../lib/constants";
+import alert from "../../components/dialogboxes/alert";
 
 /**
  * 
@@ -31,7 +32,7 @@ export default function PluginsInclude(updates) {
     dataset: {
       action: 'add-source'
     },
-    onclick: addSource,
+    onclick: () => addSource(),
   })
   const plugins = {
     all: [],
@@ -96,7 +97,7 @@ export default function PluginsInclude(updates) {
     const $target = event.target;
     const action = $target.getAttribute('action');
     if (action === 'search') {
-      searchBar($page.get('#plugins'));
+      searchBar($page.get('#plugin-list'));
       return;
     }
     if (action === 'open') {
@@ -144,7 +145,7 @@ export default function PluginsInclude(updates) {
         const plugin = plugins.all.find(({ id }) => id === Url.basename(url));
         if (plugin) {
           plugin.installed = true;
-          plugin.plugin = getLocalRes(plugin.id, 'plugin.json');
+          plugin.localPlugin = getLocalRes(plugin.id, 'plugin.json');
         }
       });
       allState = LOADED;
@@ -180,10 +181,11 @@ export default function PluginsInclude(updates) {
   }
 
   function onUninstall(pluginId) {
-    const plugin = plugins.installed.find((plugin) => plugin.id === pluginId);
+    const plugin = plugins.all.find((plugin) => plugin.id === pluginId);
+    plugins.installed = plugins.installed.filter((plugin) => plugin.id !== pluginId);
     if (plugin) {
       plugin.installed = false;
-      plugins.installed = plugins.installed.filter((item) => item.id !== pluginId);
+      plugin.localPlugin = null;
     }
     render();
   }
@@ -192,13 +194,14 @@ export default function PluginsInclude(updates) {
     return Url.join(PLUGIN_DIR, id, name);
   }
 
-  async function addSource() {
-    const source = await dialogs.prompt('Enter plugin source', 'https://', 'url');
+  async function addSource(value = 'https://') {
+    const source = await dialogs.prompt('Enter plugin source', value, 'url');
     const json = Url.join(source, 'plugin.json');
     try {
       helpers.showTitleLoader();
       const data = await ajax.get(json, {
-        responseType: 'json'
+        responseType: 'json',
+        contentType: 'application/x-www-form-urlencoded',
       });
 
       if (data) {
@@ -209,7 +212,8 @@ export default function PluginsInclude(updates) {
         }, onIninstall, onUninstall);
       }
     } catch (error) {
-      helpers.error(error);
+      const message = helpers.errorMessage(error);
+      alert(strings.error, message || 'Unable to add source.', () => addSource(source));
     } finally {
       helpers.removeTitleLoader();
     }

@@ -1,3 +1,5 @@
+import constants from "../lib/constants";
+
 const keyMapping = {
   37: 'ArrowLeft',
   38: 'ArrowUp',
@@ -8,26 +10,38 @@ const keyMapping = {
 export default {
   timeout: null,
   time: 300,
-  /**
-   * @param {TouchEvent} e 
-   * @param {*} footer 
-   * @returns 
-   */
-  onTouchStart(e, footer) {
-    /**
-     * @type {HTMLElement}
-     */
-    const el = e.target;
-    const { which } = el.dataset;
+  // click simulation doesn't work on some devices
+  onClick(e, footer) {
+    const $el = e.target;
+    const { which } = $el.dataset;
 
     if (which === undefined) {
       return;
     }
 
-    e.preventDefault();
+    if ($el.classList.contains('active')) {
+      $el.classList.remove('active');
+      clearTimeout(this.timeout);
+      this.time = 300;
+      return;
+    }
+
     const { editor } = editorManager;
     const $textarea = editor.textInput.getElement();
     const shiftKey = footer.get('#shift-key').dataset.state === 'on';
+
+    this.dispatchKey({ which }, shiftKey, $textarea);
+  },
+  oncontextmenu(e, footer) {
+    if (appSettings.value.vibrateOnTap) {
+      navigator.vibrate(constants.VIBRATION_TIME_LONG);
+    }
+    const $el = e.target;
+    const { which } = $el.dataset;
+    const { editor, activeFile } = editorManager;
+    const $textarea = editor.textInput.getElement();
+    const shiftKey = footer.get('#shift-key').dataset.state === 'on';
+
     const dispatchEventWithTimeout = () => {
       if (this.time > 50) {
         this.time -= 10;
@@ -37,17 +51,11 @@ export default {
       this.timeout = setTimeout(dispatchEventWithTimeout, this.time);
     };
 
-    document.ontouchend = this.onTouchEnd.bind(this);
-    document.ontouchcancel = this.onTouchEnd.bind(this);
-
+    if (activeFile.focused) {
+      editor.focus();
+    }
     dispatchEventWithTimeout();
-  },
-  onTouchEnd() {
-    this.time = 300;
-    clearTimeout(this.timeout);
-    document.ontouchend = null;
-    document.ontouchcancel = null;
-    document.ontouchstart = null;
+    $el.classList.add('active');
   },
   dispatchKey({ which }, shiftKey, $textarea) {
     const keyevent = window.createKeyboardEvent('keydown', {

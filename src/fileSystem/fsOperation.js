@@ -126,6 +126,9 @@ function fsOperation(uri) {
       stat() {
         return fs.stat();
       },
+      get localName() {
+        return fs.localName;
+      }
     };
   }
 
@@ -170,6 +173,9 @@ function fsOperation(uri) {
       stat() {
         return fs.stat();
       },
+      get localName() {
+        return fs.localName;
+      }
     };
   }
 
@@ -288,7 +294,7 @@ function fsOperation(uri) {
         .listDir(url)
         .then((entries) => {
           entries.map((entry) => {
-            const url = decodeURI(entry.nativeURL);
+            const url = decodeURIComponent(entry.nativeURL);
             const name = Url.basename(url);
             files.push({
               name,

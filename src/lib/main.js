@@ -246,6 +246,13 @@ async function loadApp() {
     transformOrigin: 'top right',
     innerHTML: () => {
       const file = editorManager.activeFile;
+
+      if (file.loading) {
+        $fileMenu.classList.add('disabled');
+      } else {
+        $fileMenu.classList.remove('disabled');
+      }
+
       return mustache.render(
         $_fileMenu,
         Object.assign(strings, {
@@ -255,6 +262,7 @@ async function loadApp() {
           file_info: !!file.uri,
           file_eol: file.eol,
           copy_text: !!editorManager.editor.getCopyText(),
+          new_file: file.name === constants.DEFAULT_FILE_NAME && !file.session.getValue(),
         }),
       );
     },
@@ -267,7 +275,25 @@ async function loadApp() {
       action: 'run',
     },
     onclick() {
-      run();
+      const {
+        serverPort,
+        previewPort,
+        previewMode,
+        disableCache,
+        host,
+      } = appSettings.value;
+      if (serverPort === previewPort) {
+        run();
+        return;
+      }
+
+      const src = `http://${host}:${previewPort}`;
+      if (previewMode === 'browser') {
+        system.openInBrowser(src);
+        return;
+      }
+
+      system.inAppBrowser(src, '', false, disableCache);
     },
     oncontextmenu() {
       run(false, "inapp", true);
@@ -341,7 +367,7 @@ async function loadApp() {
   editorManager.on('file-loaded', onFileUpdate);
   $fileMenu.addEventListener('click', handleMenu);
   $mainMenu.addEventListener('click', handleMenu);
-  $footer.addEventListener('touchstart', footerTouchStart);
+  $footer.addEventListener('click', footerOnClick);
   $footer.addEventListener('contextmenu', footerOnContextMenu);
   document.addEventListener('backbutton', actionStack.pop);
   document.addEventListener('menubutton', $sidebar.toggle);
@@ -429,8 +455,8 @@ async function loadApp() {
     acode.exec(action, value);
   }
 
-  function footerTouchStart(e) {
-    arrowkeys.onTouchStart(e, $footer);
+  function footerOnClick(e) {
+    arrowkeys.onClick(e, $footer);
   }
 
   /**
@@ -438,13 +464,7 @@ async function loadApp() {
    * @param {MouseEvent} e
    */
   function footerOnContextMenu(e) {
-    if (
-      e.target instanceof HTMLInputElement ||
-      e.target instanceof HTMLTextAreaElement
-    )
-      return;
-    e.preventDefault();
-    editorManager.editor.focus();
+    arrowkeys.oncontextmenu(e, $footer);
   }
 
   function onEditorUpdate(mode, saveState = true) {
@@ -466,8 +486,15 @@ async function loadApp() {
 
   async function onFileUpdate() {
     try {
-      const { activeFile } = editorManager;
-      const canRun = await activeFile?.canRun();
+      const { serverPort, previewPort } = appSettings.value;
+      let canRun = false;
+      if (serverPort !== previewPort) {
+        canRun = true;
+      } else {
+        const { activeFile } = editorManager;
+        canRun = await activeFile?.canRun();
+      }
+
       if (canRun) {
         $header.insertBefore($runBtn, $header.lastChild);
       } else {
